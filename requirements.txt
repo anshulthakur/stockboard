@@ -1,0 +1,15 @@
+django
+numpy
+pandas
+TA-lib
+scikit-learn
+scipy
+websocket-client
+requests
+matplotlib
+Brotli
+django-webpack-loader
+django-pandas
+holoviews
+dateparser
+argcomplete

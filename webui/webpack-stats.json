@@ -1,0 +1,16 @@
+{
+  "status": "done",
+  "assets": {
+    "webui-a781c44d82ab832dd176.js": {
+      "name": "webui-a781c44d82ab832dd176.js",
+      "path": "/home/anshul/web/analytics/analytics/stocks/webui/static/webui/webui-a781c44d82ab832dd176.js",
+      "publicPath": "static/webui/webui-a781c44d82ab832dd176.js"
+    }
+  },
+  "chunks": {
+    "webui": [
+      "webui-a781c44d82ab832dd176.js"
+    ]
+  },
+  "publicPath": "static/webui/"
+}

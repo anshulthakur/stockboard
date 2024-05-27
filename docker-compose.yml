@@ -1,0 +1,12 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: always
+    command: python3 manage.py runserver 0.0.0.0:80
+    container_name: sd_c
+    volumes:
+    - .:/app
+    ports:
+    - "8002:80"
