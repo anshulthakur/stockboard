@@ -20,7 +20,7 @@ from lib.misc import get_filelist
 from lib.retrieval import get_stock_listing
 from lib.logging import set_loglevel, log
 from lib.cache import cached
-from lib.indices import load_blacklist
+from lib.indices import load_blacklist, get_symbol_replacements
 
 from stocks.models import Stock, Market
 
@@ -85,8 +85,7 @@ def get_dataframe(stock, market, timeframe, duration, date=datetime.datetime.now
         symbol = stock.strip().replace('&', '_')
         symbol = symbol.replace('-', '_')
         symbol = symbol.replace('*', '')
-        nse_map = {'UNITDSPR': 'MCDOWELL_N',
-                   'MOTHERSUMI': 'MSUMI'}
+        nse_map = get_symbol_replacements()
         if symbol in nse_map:
             symbol = nse_map[symbol]
         

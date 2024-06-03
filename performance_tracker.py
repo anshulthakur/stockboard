@@ -7,6 +7,7 @@ from lib.tradingview import get_tvfeed_instance, Interval
 from lib.retrieval import get_stock_listing
 from lib.logging import set_loglevel, log
 from lib.cache import cached
+from lib.indices import get_symbol_replacements
 
 from stocks.models import Stock, Market
 
@@ -27,8 +28,7 @@ def get_dataframe(stock, market, timeframe, duration, date=datetime.datetime.now
         symbol = stock.strip().replace('&', '_')
         symbol = symbol.replace('-', '_')
         symbol = symbol.replace('*', '')
-        nse_map = {'UNITDSPR': 'MCDOWELL_N',
-                   'MOTHERSUMI': 'MSUMI'}
+        nse_map = get_symbol_replacements()
         if symbol in nse_map:
             symbol = nse_map[symbol]
         
@@ -77,6 +77,9 @@ def main(file):
     df['date_added'] = pd.to_datetime(df['date_added'], format='%Y-%m-%d')
     for ii in range(0, len(df)):
         try:
+            if df.loc[ii, 'tracking'] == False:
+                log(f"Skip {df.loc[ii ,'market'].strip()}:{df.loc[ii, 'symbol'].strip()}", logtype='info')
+                continue
             log(f"{df.loc[ii ,'market'].strip()}:{df.loc[ii, 'symbol'].strip()}", logtype='info')
             stock = get_dataframe(df.loc[ii, 'symbol'].strip().upper(), 
                                 df.loc[ii, 'market'].strip().upper(), 

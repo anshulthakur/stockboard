@@ -13,3 +13,4 @@ django-pandas
 holoviews
 dateparser
 argcomplete
+djangorestframework

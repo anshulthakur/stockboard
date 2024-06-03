@@ -18,7 +18,7 @@ from lib.tradingview import Interval, convert_timeframe_to_quant, get_tvfeed_ins
 from lib.retrieval import get_stock_listing
 from lib.logging import set_loglevel, log
 from lib.cache import cached
-from lib.indices import load_blacklist
+from lib.indices import load_blacklist, get_symbol_replacements
 from stocks.models import Stock, Market
 
 nse_list = 'NSE_list.csv'
@@ -150,8 +150,7 @@ def get_dataframe(stock, market, timeframe, duration, date=datetime.datetime.now
         symbol = stock.strip().replace('&', '_')
         symbol = symbol.replace('-', '_')
         symbol = symbol.replace('*', '')
-        nse_map = {'UNITDSPR': 'MCDOWELL_N',
-                   'MOTHERSUMI': 'MSUMI'}
+        nse_map = get_symbol_replacements()
         if symbol in nse_map:
             symbol = nse_map[symbol]
         

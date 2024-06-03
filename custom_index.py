@@ -15,6 +15,7 @@ from lib.cache import cached
 from lib.logging import set_loglevel, log
 from lib.misc import create_directory
 from lib.nse import NseIndia
+from lib.indices import get_symbol_replacements
 
 #Prepare to load stock data as pandas dataframe from source. In this case, prepare django
 import django
@@ -144,8 +145,7 @@ def get_index_dataframe(name, end_date, duration=300, sampling='w', online=True,
                 log(f'Download {stock} data', logtype='debug')
                 symbol = stock.strip().replace('&', '_')
                 symbol = symbol.replace('-', '_')
-                nse_map = {'UNITDSPR': 'MCDOWELL_N',
-                           'MOTHERSUMI': 'MSUMI'}
+                nse_map = get_symbol_replacements()
                 if symbol in nse_map:
                     symbol = nse_map[symbol]
                 

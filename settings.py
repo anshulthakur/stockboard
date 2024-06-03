@@ -18,6 +18,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "stocks",
+    "rest_framework",
+    #"portfolio",
     "webui",
     "webpack_loader",
 ]
