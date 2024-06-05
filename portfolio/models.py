@@ -15,7 +15,7 @@ class Account(models.Model):
     ENTITIES = {"BANK": "BANK", 
                 "BRKR": "BROKER",
                 "XCNG": "EXCHANGE"}
-    id = models.BigIntegerField(verbose_name="Account ID", unique=True)
+    account_id = models.BigIntegerField(verbose_name="Account ID", unique=True)
     name = models.CharField(max_length=255, blank = False, null = False)
     entity = models.CharField(choices=ENTITIES)
     user = models.ForeignKey(User, null = False, blank = False)
@@ -44,12 +44,12 @@ class Trade(models.Model):
     '''
     TRADE_TYPES = {"BUY": "BUY", 
                    "SELL": "SELL"}
-    date = models.DateTimeField()
+    timestamp = models.DateTimeField()
     stock = models.ForeignKey(Stock)
     quantity = models.DecimalField(max_digits=20)
     price = models.DecimalField(max_digits=20)
     operation = models.CharField(choices=TRADE_TYPES)
-    portfolio = models.ForeignKey(Portfolio, null=False, blank=False)
+    portfolio = models.ForeignKey(related_name="portfolio", Portfolio, null=False, blank=False)
     tax = models.DecimalField(max_digits = 20, blank=True)
     brokerage = models.DecimalField(max_digits = 20, blank = True)
 
