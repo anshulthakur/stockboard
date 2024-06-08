@@ -1,4 +1,4 @@
-from django.shortcuts import 
+from django.shortcuts import render
 from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
@@ -17,7 +17,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 class GroupViewSet(viewsets.ModelViewSet):
     """
@@ -25,7 +25,25 @@ class GroupViewSet(viewsets.ModelViewSet):
     """
     queryset = Group.objects.all().order_by('id')
     serializer_class = GroupSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+
+class MarketViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows market objects to be viewed or edited
+    """
+    queryset = Market.objects.all().order_by('id')
+    serializer_class = MarketSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+class StockViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows market objects to be viewed or edited
+    """
+    queryset = Stock.objects.all().order_by('id')
+    serializer_class = StockSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
 
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all().order_by('id')
@@ -34,12 +52,26 @@ class AccountViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
 
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
 class PortfolioViewSet(viewsets.ModelViewSet):
     queryset = Portfolio.objects.all().order_by('id')
     serializer_class = PortfolioSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all().order_by('id')
@@ -48,11 +80,18 @@ class TransactionViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
 
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
     filterset_fields = ['timestamp']
 
     def get_queryset(self):
         queryset = self.queryset
-        print(self.request.query_params)
+        #print(self.request.query_params)
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
 
@@ -63,6 +102,13 @@ class TransactionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(timestamp__leq=date_end_filter)
 
         return queryset
+    
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class TradeViewSet(viewsets.ModelViewSet):
@@ -76,7 +122,7 @@ class TradeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = self.queryset
-        print(self.request.query_params)
+        #print(self.request.query_params)
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
 
@@ -87,6 +133,13 @@ class TradeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(timestamp__leq=date_end_filter)
 
         return queryset
+    
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 class DividendViewSet(viewsets.ModelViewSet):
     queryset = Dividend.objects.all().order_by('id')
@@ -99,7 +152,7 @@ class DividendViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = self.queryset
-        print(self.request.query_params)
+        #print(self.request.query_params)
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
 
@@ -110,3 +163,10 @@ class DividendViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(record_date__leq=date_end_filter)
 
         return queryset
+    
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

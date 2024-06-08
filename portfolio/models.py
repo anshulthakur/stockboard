@@ -17,10 +17,10 @@ class Account(models.Model):
                 "XCNG": "EXCHANGE"}
     account_id = models.BigIntegerField(verbose_name="Account ID", unique=True)
     name = models.CharField(max_length=255, blank = False, null = False)
-    entity = models.CharField(choices=ENTITIES)
-    user = models.ForeignKey(User, null = False, blank = False)
+    entity = models.CharField(choices=ENTITIES, max_length=10)
+    user = models.ForeignKey(User, null = False, blank = False, on_delete=models.CASCADE)
     last_updated = models.DateTimeField(auto_now_add=True)
-    currency = models.CharField(blank = False, default='INR')
+    currency = models.CharField(blank = False, default='INR', max_length=10)
 
 
 class Portfolio(models.Model):
@@ -33,7 +33,7 @@ class Portfolio(models.Model):
     the summation of all the historical trades on the portfolio.
     '''
     name = models.CharField(verbose_name="Portfolio name", max_length=50)
-    account = models.ForeignKey(Account, null=False, blank=False)
+    account = models.ForeignKey(Account, null=False, blank=False, on_delete=models.CASCADE)
 
 class Trade(models.Model):
     '''
@@ -45,13 +45,13 @@ class Trade(models.Model):
     TRADE_TYPES = {"BUY": "BUY", 
                    "SELL": "SELL"}
     timestamp = models.DateTimeField()
-    stock = models.ForeignKey(Stock)
-    quantity = models.DecimalField(max_digits=20)
-    price = models.DecimalField(max_digits=20)
-    operation = models.CharField(choices=TRADE_TYPES)
-    portfolio = models.ForeignKey(related_name="portfolio", Portfolio, null=False, blank=False)
-    tax = models.DecimalField(max_digits = 20, blank=True)
-    brokerage = models.DecimalField(max_digits = 20, blank = True)
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=20, decimal_places=5)
+    price = models.DecimalField(max_digits=20, decimal_places=2)
+    operation = models.CharField(choices=TRADE_TYPES, max_length=4)
+    portfolio = models.ForeignKey(Portfolio, related_name="portfolio", null=False, blank=False, on_delete=models.CASCADE)
+    tax = models.DecimalField(max_digits = 20, blank=True, decimal_places=2)
+    brokerage = models.DecimalField(max_digits = 20, blank = True, decimal_places=2)
 
 class Transaction(models.Model):
     '''
@@ -62,9 +62,9 @@ class Transaction(models.Model):
     '''
     TRANSACTION_TYPE = {"CR": "CREDIT",
                         "DB": "DEBIT"}
-    account = models.ForeignKey(Account, null=False)
-    transaction = models.CharField(choices=TRANSACTION_TYPE)
-    amount = models.DecimalField(max_digits=20)
+    account = models.ForeignKey(Account, null=False, on_delete=models.CASCADE)
+    transaction = models.CharField(choices=TRANSACTION_TYPE, max_length=6)
+    amount = models.DecimalField(max_digits=20, decimal_places=3)
     timestamp = models.DateTimeField()
 
 
@@ -75,6 +75,6 @@ class Dividend(models.Model):
     the record date. 
     '''
     record_date = models.DateField(null=False, blank = False)
-    stock = models.ForeignKey(Stock)
-    amount = models.DecimalField(max_digits=20)
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
 

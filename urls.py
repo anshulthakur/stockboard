@@ -25,8 +25,9 @@ app_name="core"
 admin.autodiscover()
 
 urlpatterns = [
-    path("", include("webui.urls")), 
+    path("portfolio/", include("portfolio.urls"), name="portfolio-app"),
     path("admin/", admin.site.urls),
+    path("", include("webui.urls")), 
 ]
 
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
