@@ -15,3 +15,4 @@ dateparser
 argcomplete
 djangorestframework
 django-filter
+drf-spectacular

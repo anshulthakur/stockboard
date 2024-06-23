@@ -5,6 +5,7 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 module.exports = {
   entry: {
     portfolio: './src/index.js',
+    //webui: '../webui/src/index.js',
   },
   output: {
     path: path.resolve('./static/portfolio/'),

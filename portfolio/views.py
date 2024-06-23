@@ -7,9 +7,22 @@ from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
 
-# Create your views here.
-def index(request):
-    return render(request, "portfolio/index.html")
+def overview(request):
+    enabled_modules = {'Stocks': {},
+                       'Crypto': {},
+                       'Commodity': {},
+                       }
+    context = {'entries': enabled_modules,}
+    return render(request, "portfolio/overview.html", context=context)
+
+def accounts(request):
+    enabled_modules = {'Stocks': {},
+                       'Crypto': {},
+                       'Commodity': {},
+                       }
+    context = {'entries': enabled_modules,}
+    return render(request, "portfolio/accounts.html", context=context)
+
 
 class UserViewSet(viewsets.ModelViewSet):
     """

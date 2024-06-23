@@ -1,20 +1,15 @@
 {
   "status": "done",
   "assets": {
-    "portfolio-7c51d974fbf11a53056d.js": {
-      "name": "portfolio-7c51d974fbf11a53056d.js",
-      "path": "/home/anshul/web/stockboard/portfolio/static/portfolio/portfolio-7c51d974fbf11a53056d.js",
-      "publicPath": "static/portfolio/portfolio-7c51d974fbf11a53056d.js"
-    },
-    "portfolio-7c51d974fbf11a53056d.js.LICENSE.txt": {
-      "name": "portfolio-7c51d974fbf11a53056d.js.LICENSE.txt",
-      "path": "/home/anshul/web/stockboard/portfolio/static/portfolio/portfolio-7c51d974fbf11a53056d.js.LICENSE.txt",
-      "publicPath": "static/portfolio/portfolio-7c51d974fbf11a53056d.js.LICENSE.txt"
+    "portfolio-85495e7ca56413253e99.js": {
+      "name": "portfolio-85495e7ca56413253e99.js",
+      "path": "/home/anshul/stockboard/portfolio/static/portfolio/portfolio-85495e7ca56413253e99.js",
+      "publicPath": "static/portfolio/portfolio-85495e7ca56413253e99.js"
     }
   },
   "chunks": {
     "portfolio": [
-      "portfolio-7c51d974fbf11a53056d.js"
+      "portfolio-85495e7ca56413253e99.js"
     ]
   },
   "publicPath": "static/portfolio/"

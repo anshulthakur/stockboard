@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "portfolio",
     "webui",
     "webpack_loader",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -84,6 +85,11 @@ USE_TZ = False
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 STATIC_URL = "static/"
+
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR,"static"),
+]
+
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 PROJECT_DIRS = {
@@ -97,8 +103,8 @@ RRG_PROGRESS_FILE = os.path.join(PROJECT_DIRS.get('rrg'), ".progress.json")
 
 WEBPACK_LOADER = {
   "DEFAULT": {
-    "BUNDLE_DIR_NAME": "webui/",
-    "STATS_FILE": os.path.join(BASE_DIR, "webui/webpack-stats.json")
+    "BUNDLE_DIR_NAME": "portfolio/",
+    "STATS_FILE": os.path.join(BASE_DIR, "portfolio/webpack-stats.json")
   }
 }
 
@@ -111,6 +117,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

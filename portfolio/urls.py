@@ -1,4 +1,6 @@
 from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView
+from drf_spectacular.views import SpectacularSwaggerView
 import portfolio.views as views
 from rest_framework import routers
 
@@ -19,6 +21,9 @@ router.register(r'dividends', views.DividendViewSet, basename='dividend')
 app_name="portfolio"
 
 urlpatterns = [
-    path('overview/', views.index, name="portfolio-overview"),
+    path('overview', views.overview, name="portfolio-overview"),
+    path('accounts', views.accounts, name="accounts-page"),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='portfolio:schema'), name='swagger'),
     path("api/", include((router.urls))),
 ]
