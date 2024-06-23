@@ -4,12 +4,13 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 
 module.exports = {
   entry: {
-    portfolio: './src/index.js',
+    overview: './src/overview.js',
+    accounts: './src/accounts.js',
     //webui: '../webui/src/index.js',
   },
   output: {
     path: path.resolve('./static/portfolio/'),
-    filename: '[name]-[hash].js',
+    filename: '[name].bundle.js',
     publicPath: 'static/portfolio/',
   },
   plugins: [
@@ -32,4 +33,15 @@ module.exports = {
       },
     ],
   },
+  optimization: {
+    splitChunks: {
+      cacheGroups: {
+        reactVendor: {
+          test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/,
+          name: 'vendor-react',
+          chunks: 'all',
+        },
+      },
+    },
+  }
 }

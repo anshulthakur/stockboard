@@ -1,9 +1,11 @@
 {% extends "portfolio/base.html" %}
+{% load render_bundle from webpack_loader %}
 
 {% block content %}
     <main class="row overflow-auto">
         <div class="col pt-4">
             <div id="app"></div>
+            {% render_bundle 'overview' %}
         </div>
     </main>
 {% endblock content %}

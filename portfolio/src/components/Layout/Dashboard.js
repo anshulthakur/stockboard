@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-const Dashboard = () => {
+const Dashboard = ({message}) => {
   return (
     <div>
-        <div>Hello there!</div>
+        <div>{message}</div>
         
     </div>
   );
