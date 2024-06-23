@@ -21,6 +21,8 @@ from lib.cache import cached
 from lib.indices import load_blacklist, get_symbol_replacements
 from stocks.models import Stock, Market
 
+import os
+
 nse_list = 'NSE_list.csv'
 bse_list = 'BSE_list.csv'
 blacklist_file = 'blacklist.txt'
@@ -333,14 +335,13 @@ def main(reference, timeframe, delta, stock=None, logscale=False,
         #print(f'Shortlist: {json.dumps(shortlist, indent=2)}')
         print(f'\nShortlist: {sorted( ((v,k) for k,v in shortlist.items()), reverse=True)}')
 
-
 if __name__ == "__main__":
     day = datetime.date.today()
     import argparse
     import argcomplete
     parser = argparse.ArgumentParser(description='Perform reverse search for indices')
     parser.add_argument('-t', '--timeframe', help="Timeframe")
-    parser.add_argument('-f', '--file', help="CSV file of the candlesticks to search for")
+    parser.add_argument('-f', '--file', help="CSV file of the candlesticks to search for", required=True)
     parser.add_argument('-d', '--delta', action="store_true", default=False, help="Use delta between points to calculate similarity")
     parser.add_argument('-s', '--stock', help="Specify stock to compare with")
     parser.add_argument('-l', '--log', action="store_true", default=False, help="Use log scaling for price values ")
