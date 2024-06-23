@@ -6,6 +6,7 @@ Created on 17-Oct-2022
 '''
 from __future__ import print_function
 from PIL import Image, ImageFilter
+import numpy as np
 from numpy import asarray, array
 
 debug = False
@@ -120,6 +121,62 @@ def variant2(img_name):
     # Save the output image
     im2.save(base_name+'_crop_2.png')
 
+
+def classify_image(numpydata, colors):
+    # Create a (rows * cols, 3) matrix for color distance computation
+    flat_numpydata = numpydata.reshape(-1, 3)
+    
+    # Compute Manhattan distance for all colors
+    manhattan = lambda x, y: np.sum(np.abs(x - y), axis=1)
+    distances = {color: manhattan(flat_numpydata, np.array(rgb)) for color, rgb in colors.items()}
+    
+    # Find the minimum distance color for each pixel
+    classified_colors = np.array([min(distances, key=lambda k: distances[k][i]) for i in range(flat_numpydata.shape[0])])
+    
+    return classified_colors.reshape(numpydata.shape[:2])
+
+def transform_colors(classified_colors, transform_rule, colors):
+    # Apply transformation rule
+    transformed_colors = np.vectorize(transform_rule.get)(classified_colors, classified_colors)
+    
+    # Map transformed colors to RGB values
+    color_map = {color: colors.get(color, (0, 0, 0)) for color in set(transformed_colors.flatten())}
+    rgb_colors = np.vectorize(lambda x: color_map[x])(transformed_colors)
+    
+    return np.stack(rgb_colors, axis=-1)
+
+def handle_boundaries(classified_colors, numpydata, red_candle, green_candle, colors):
+    rows, cols = classified_colors.shape
+    for col in range(1, cols):
+        red_candle_condition = (np.isin(classified_colors[:, col], red_candle) & np.isin(classified_colors[:, col-1], green_candle))
+        green_candle_condition = (np.isin(classified_colors[:, col], green_candle) & np.isin(classified_colors[:, col-1], red_candle))
+        boundary_condition = red_candle_condition | green_candle_condition
+        numpydata[boundary_condition, col, :] = colors['white']
+    return numpydata
+
+
+def alt_main(img_name):
+    #print('Preprocessing: images/{}.png'.format(args.file))
+    base_name = img_name
+    if len(img_name.split('.'))>=2 and img_name.split('.')[-1] in ['jpg', 'jpeg', 'png']:
+        base_name = ''.join(img_name.split('.')[0:-1])
+    else:
+        img_name = img_name+'.png'
+    print('Preprocessing: {}'.format(img_name))
+    numpydata = array( Image.open(img_name).convert('RGB'))
+    # Classify colors
+    classified_colors = classify_image(numpydata, colors)
+
+    # Transform colors
+    numpydata = transform_colors(classified_colors, transform_rule, colors)
+
+    # Handle boundaries
+    numpydata = handle_boundaries(classified_colors, numpydata, red_candle, green_candle, colors)
+
+    # Save the transformed image
+    im = Image.fromarray(numpydata.astype(np.uint8))
+    im.save(base_name+'_crop.png')
+
 def main(img_name):
     #print('Preprocessing: images/{}.png'.format(args.file))
     base_name = img_name
@@ -163,5 +220,6 @@ if __name__ == "__main__":
     if args.debug:
         print('Debug is ON')
         debug=True
-    main(fname)
+    #main(fname)
+    alt_main(fname)
     #variant2(fname)
