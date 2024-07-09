@@ -58,25 +58,25 @@ def parse_bse_delivery(dateval):
 def parse_bse_bhav(reader, symbols, fname):
     global error_dates
     deliveries = None
-    dateval = datetime.strptime(fname.upper().replace('EQ','').replace('.CSV',''), '%d%m%y')
+    dateval = datetime.strptime(fname.upper().replace('BHAVCOPY_BSE_CM_0_0_0_','').replace('_F_0000.CSV',''), '%Y%m%d')
     market = Market.objects.get(name='BSE')
     #print(symbols)
     for row in reader:
-        if row.get('SC_CODE', None) is not None:
-            if row.get('SC_CODE').strip() not in symbols:
+        if row.get('FinInstrmId', None) is not None:
+            if row.get('FinInstrmId').strip() not in symbols:
                 #print(f"{row.get('SC_CODE')}({row.get('SC_NAME')}) has not been added to DB yet. Skip.")
                 continue
             if deliveries is None:
                 deliveries = parse_bse_delivery(dateval)
             try:
-                stock = Stock.objects.get(sid=row.get('SC_CODE'),
+                stock = Stock.objects.get(sid=row.get('FinInstrmId'),
                                         market=market)
             except Stock.MultipleObjectsReturned:
-                print(f"Trying to handle multiple entries for SID: {row.get('SC_CODE')}")
-                s = Stock.objects.filter(sid=row.get('SC_CODE'),
+                print(f"Trying to handle multiple entries for SID: {row.get('FinInstrmId')}")
+                s = Stock.objects.filter(sid=row.get('FinInstrmId'),
                                         market=market)
                 if len(s)>2:
-                    raise Exception(f"Can't handle conflict of more than 2 values for SID {row.get('SC_CODE')}")
+                    raise Exception(f"Can't handle conflict of more than 2 values for SID {row.get('FinInstrmId')}")
                 stock = s[1]
                 try:
                     l = Listing.objects.get(stock=stock)
@@ -88,28 +88,28 @@ def parse_bse_bhav(reader, symbols, fname):
                     stock.symbol= symbol
                     stock.save()
                     #Though we don't need to redo it, but raise again if issues found
-                    stock = Stock.objects.get(sid=row.get('SC_CODE'),
+                    stock = Stock.objects.get(sid=row.get('FinInstrmId'),
                                                 market=market)
             try:
                 #listing = Listing.objects.filter(stock=stock, date__contains = dateval)
                 #if len(listing) == 0:
                 listing = Listing.objects.get(stock=stock, date = dateval)
-                if listing.deliverable is None and row.get('SC_CODE') in deliveries:
-                    listing.deliverable = deliveries.get(row.get('SC_CODE'))
+                if listing.deliverable is None and row.get('FinInstrmId') in deliveries:
+                    listing.deliverable = deliveries.get(row.get('FinInstrmId'))
                     print('Update delivery data')
                     listing.save()
             except Listing.DoesNotExist:
                 print('Create entry for {}'.format(stock.symbol))
                 listing = Listing(date=dateval,
-                                  open=row.get('OPEN'),
-                                  high=row.get('HIGH'),
-                                  low=row.get('LOW'),
-                                  close=row.get('CLOSE'),
-                                  traded=row.get('NO_OF_SHRS'),
-                                  trades=row.get('NO_TRADES'),
+                                  open=row.get('OpnPric'),
+                                  high=row.get('HghPric'),
+                                  low=row.get('LwPric'),
+                                  close=row.get('ClsPric'),
+                                  traded=row.get('TtlTradgVol'),
+                                  trades=row.get('TtlNbOfTxsExctd'),
                                   stock = stock)
-                if row.get('SC_CODE') in deliveries:
-                    listing.deliverable = deliveries.get(row.get('SC_CODE'))
+                if row.get('FinInstrmId') in deliveries:
+                    listing.deliverable = deliveries.get(row.get('FinInstrmId'))
                 listing.save()
             except Exception as e:
                 print(e)
@@ -127,7 +127,7 @@ def parse_nse_delivery(dateval):
     print('Parsing '+path)
     try:
         with open(path,'r') as fd:
-            reader = csv.DictReader(fd)
+            reader = csv.DictReader(fd, skipinitialspace=True)
             for row in reader:
                 data[row['Name of Security']]= row['Deliverable Quantity']
     except:
@@ -135,41 +135,50 @@ def parse_nse_delivery(dateval):
     return data
 
 def parse_nse_bhav(reader, symbols, fname):
-    deliveries = None
+    #deliveries = None
     #print(symbols)
     market = Market.objects.get(name='NSE')
     dateval = None
     for row in reader:
         if row.get('SYMBOL', None) is not None:
             #print(row)
-            if row.get('SYMBOL') not in symbols:
-                #print(f"{row.get('SYMBOL')} has not been added to DB yet. Skip.")
+            if row.get('SYMBOL') not in symbols and row.get('SERIES') in ['EQ', 'BE']:
+                print(f"{row.get('SYMBOL')} has not been added to DB yet. Skip.")
                 continue
             if dateval is None:
-                dateval = dateparser.parse(row.get('TIMESTAMP').strip())
-            if deliveries is None:
-                deliveries = parse_nse_delivery(dateval)
-            stock = Stock.objects.get(symbol=row.get('SYMBOL'),
+                dateval = dateparser.parse(row.get('DATE1').strip())
+            # if deliveries is None:
+            #     deliveries = parse_nse_delivery(dateval)
+            stock = None
+            try:
+                stock = Stock.objects.get(symbol=row.get('SYMBOL'),
                                         market=market)
+            except Stock.DoesNotExist:
+                print(f"{row.get('SYMBOL')} does not exist for market {market.name}")
+                continue
             try:
                 #listing = Listing.objects.filter(stock=stock, date__contains = dateval)
                 #if len(listing) == 0:
                 listing = Listing.objects.get(stock=stock, date = dateval)
-                if listing.deliverable is None and row.get('SYMBOL') in deliveries:
-                    listing.deliverable = deliveries.get(row.get('SYMBOL'))
+                if listing.deliverable is None:
+                    if row.get('DELIV_QTY') == '-':
+                        listing.deliverable = row.get('TTL_TRD_QNTY')
+                    else:
+                        listing.deliverable = row.get('DELIV_QTY')
                     print('Update delivery data')
                     listing.save()
             except Listing.DoesNotExist:
                 print('Create entry for {}'.format(stock.symbol))
                 listing = Listing(date=dateval,
-                                open=row.get('OPEN'),
-                                high=row.get('HIGH'),
-                                low=row.get('LOW'),
-                                close=row.get('CLOSE'),
-                                traded=row.get('TOTTRDQTY'),
+                                open=row.get('OPEN_PRICE'),
+                                high=row.get('HIGH_PRICE'),
+                                low=row.get('LOW_PRICE'),
+                                close=row.get('CLOSE_PRICE'),
+                                traded=row.get('TTL_TRD_QNTY'),
+                                deliverable=row.get('DELIV_QTY') if row.get('DELIV_QTY') != '-' else row.get('TTL_TRD_QNTY'),
                                 stock = stock)
-                if row.get('SYMBOL') in deliveries:
-                    listing.deliverable = deliveries.get(row.get('SYMBOL'))
+                #if row.get('SYMBOL') in deliveries:
+                #    listing.deliverable = deliveries.get(row.get('SYMBOL'))
                 listing.save()
             except Exception as e:
                 print(e)
@@ -215,13 +224,13 @@ def get_bhav_filename(day, market):
                   'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
     fname = None
     if market=='BSE':
-        fname= 'EQ{day:02}{month:02}{year}.CSV'.format(day = day.day, 
+        fname= 'BhavCopy_BSE_CM_0_0_0_{year:04}{month:02}{day:02}_F_0000.CSV'.format(day = day.day, 
                                                         month = day.month, 
-                                                        year = str(day.year)[-2:])
+                                                        year = str(day.year))
     elif market=='NSE':
-        fname='cm{day:02}{month}{year:04}bhav.csv'.format(day = day.day, 
-                                                        month = months[day.month], 
-                                                        year = day.year)
+        fname='sec_bhavdata_full_{day:02}{month:02}{year:04}.csv'.format(day = day.day, 
+                                                                        month = day.month, 
+                                                                        year = day.year)
     return fname
 
 
