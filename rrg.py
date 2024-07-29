@@ -409,106 +409,70 @@ def load_file_list(directory="./indices/"):
             file_list.append(f)
     return file_list
 
+
 def load_sectoral_indices(date, sampling, entries=50):
     '''
     We use only the closing values of the sectoral indices right now
     '''
     log('Loading sectoral indices', logtype='debug')
     from pathlib import Path
-    df = pd.read_csv(os.path.join(index_data_dir,'Nifty_50.csv'))
-    df.rename(columns={'Index Date': 'date',
-                       'Closing Index Value': 'Nifty_50'},
-               inplace = True)
+    
+    df = pd.read_csv(os.path.join(index_data_dir, 'Nifty_50.csv'))
+    df.rename(columns={'Index Date': 'date', 'Closing Index Value': 'Nifty_50'}, inplace=True)
     df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-    df.set_index('date', inplace = True)
-    df.index = df.index + pd.Timedelta('9 hour') +  pd.Timedelta('15 minute')
+    df.set_index('date', inplace=True)
+    df.index = df.index + pd.Timedelta('9 hour') + pd.Timedelta('15 minute')
     df = df.sort_index()
-    df = df.reindex(columns = ['Nifty_50'])
-    #filelist = load_file_list()
-
+    df = df.reindex(columns=['Nifty_50'])
+    
+    frames = [df]
+    
     for index in INDICES:
-        f = os.path.join(index_data_dir, '{}.csv'.format(index))
-        #print('Reading: {}'.format(f))
-        #index = Path(f).stem.strip().lower()
         if index == "Nifty_50":
             continue
         log(f'Loading {index}', logtype='debug')
-        s_df = pd.read_csv(f)
-        s_df.rename(columns={'Index Date': 'date',
-                             'Closing Index Value': index},
-                   inplace = True)
+        s_df = pd.read_csv(os.path.join(index_data_dir, f'{index}.csv'))
+        s_df.rename(columns={'Index Date': 'date', 'Closing Index Value': index}, inplace=True)
         s_df['date'] = pd.to_datetime(s_df['date'], format='%d-%m-%Y')
-        s_df.set_index('date', inplace = True)
-        #Add time offset for everything to begin at 9:15AM
-        s_df.index = s_df.index + pd.Timedelta('9 hour') +  pd.Timedelta('15 minute')
+        s_df.set_index('date', inplace=True)
+        s_df.index = s_df.index + pd.Timedelta('9 hour') + pd.Timedelta('15 minute')
         s_df = s_df.sort_index()
-        s_df = s_df.reindex(columns = [index])
+        s_df = s_df.reindex(columns=[index])
         s_df = s_df[~s_df.index.duplicated(keep='first')]
-        #print(s_df[s_df.index.duplicated(keep=False)])
-        df[index] = s_df[index]
+        
+        frames.append(s_df)
     
+    df = pd.concat(frames, axis=1)
     df = df[~df.index.duplicated(keep='first')]
+    
     if date is not None:
-        #Filter till the date
         df = df[:date.strftime('%Y-%m-%d')]
-    if sampling=='w':
-        #Resample weekly
-        logic = {}
-        for cols in df.columns:
-            if cols != 'date':
-                logic[cols] = 'last'
-        #Resample on weekly levels
-        df = df.resample('W').apply(logic)
-        #df = df.resample('W-FRI', closed='left').apply(logic)
+    
+    if sampling == 'w':
+        df = df.resample('W').last()
         df.index -= to_offset("6D")
-    elif sampling=='M':
-        #Resample monthly
-        logic = {}
-        for cols in df.columns:
-            if cols != 'date':
-                logic[cols] = 'last'
-        #Resample on weekly levels
-        df = df.resample('M').apply(logic)
+    elif sampling == 'M':
+        df = df.resample('M').last()
 
     filemapping = None
     with open(index_map, 'r') as fd:
         filemapping = json.load(fd)
-    #Load up members and compute indices for the required period
+    
     for index, fname in filemapping.items():
         log(f'Loading {index}', logtype='debug')
         s_df = get_index_dataframe(name=index, path=fname, sampling=sampling, online=True, end_date=date)
-
-        #print(s_df.head(10))
-        #s_df['date'] = pd.to_datetime(s_df['date'], format='%Y-%m-%d %H:%M:%S')
-        #s_df.set_index('date', inplace = True)
-        #s_df.index = s_df.index + pd.Timedelta('9 hour') +  pd.Timedelta('15 minute')
-
-        #s_df = s_df.sort_index()
-        #s_df = s_df[~s_df.index.duplicated(keep='first')]
-        #print(list(s_df.columns))
-        if sampling=='w':
-            # #Resample weekly
-            # logic = {}
-            # for cols in s_df.columns:
-            #     if cols != 'date':
-            #         logic[cols] = 'last'
-            # #Resample on weekly levels
-            # s_df = s_df.resample('W').apply(logic)
-            # #df = df.resample('W-FRI', closed='left').apply(logic)
-            # s_df.index -= to_offset("6D")
+        if len(s_df) == 0:
+            continue
+        if sampling == 'w':
             s_df.index = s_df.index.date
-        elif sampling=='M':
-            logic = {}
-            for cols in s_df.columns:
-                if cols != 'date':
-                    logic[cols] = 'last'
-            #Resample on weekly levels
-            s_df = s_df.resample('M').apply(logic)
-        #print(s_df.tail(10))
-        df[index] = s_df[index]
-    #print(df.tail(10))
-
+        elif sampling == 'M':
+            s_df = s_df.resample('M').last()
+        
+        df = df.join(s_df, how='outer')
+    df.index.name = 'date'
+    
     return df.tail(entries)
+
 
 def load_index_members(name):
     members = []
@@ -778,6 +742,7 @@ def main(date=datetime.date.today(), sampling = 'w', online=True):
     processed = load_progress()
 
     df = load_sectoral_indices(date, sampling, entries=33)
+    print(df.head())
     df = df.copy()
     benchmark = 'Nifty_50'
     jdf_df = compute_jdk(benchmark=benchmark, base_df = df)
