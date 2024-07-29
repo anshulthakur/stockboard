@@ -2,7 +2,8 @@ from django.test import TestCase
 from django.contrib.auth.models import User
 from portfolio.models import Account, Portfolio, Trade, Transaction
 from stocks.models import Stock, Market
-from datetime import datetime
+import datetime
+from django.utils import timezone
 
 from portfolio.serializers import *
 from django.urls import reverse
@@ -56,8 +57,8 @@ class SerializerTests(APITestCase):
         Transaction.objects.create(account = account,
                                    transaction = Transaction.TRANSACTION_TYPE['CR'],
                                    amount = 50000,
-                                   timestamp = datetime.now())
-        Trade.objects.create(date = datetime.now(),
+                                   timestamp = timezone.now())
+        Trade.objects.create(date = timezone.now(),
                              stock = stock,
                              quantity = 1000,
                              price = 45,
@@ -209,11 +210,11 @@ class TestTransaction(SerializerTests):
         Transaction.objects.create(account = self.account_broker,
                                    transaction = 'CREDIT',
                                    amount = 50000,
-                                   timestamp = datetime.now())
+                                   timestamp = timezone.now())
         Transaction.objects.create(account = self.account_broker,
                                    transaction = 'DEBIT',
                                    amount = 40000,
-                                   timestamp = datetime.now())
+                                   timestamp = timezone.now())
         url = reverse('portfolio:transaction-list')
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -223,7 +224,7 @@ class TestTransaction(SerializerTests):
         transaction = Transaction.objects.create(account = self.account_broker,
                                                 transaction = 'CREDIT',
                                                 amount = 50000,
-                                                timestamp = datetime.now())
+                                                timestamp = timezone.now())
         url = reverse('portfolio:transaction-detail', args=[transaction.id])
         data = {'amount': 60000}
         response = self.client.patch(url, data, format='json')
@@ -235,7 +236,7 @@ class TestTransaction(SerializerTests):
         transaction = Transaction.objects.create(account = self.account_broker,
                                                 transaction = 'CREDIT',
                                                 amount = 50000,
-                                                timestamp = datetime.now())
+                                                timestamp = timezone.now())
         url = reverse('portfolio:transaction-detail', args=[transaction.id])
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -289,7 +290,7 @@ class TestTrade(SerializerTests):
         self.assertEqual(Trade.objects.get().quantity, 400)
 
     def test_get_trade_list(self):
-        Trade.objects.create(timestamp = datetime.now(),
+        Trade.objects.create(timestamp = timezone.now(),
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
@@ -297,7 +298,7 @@ class TestTrade(SerializerTests):
                             operation= 'BUY',
                             tax= 100.5,
                             brokerage= 50.54)
-        Trade.objects.create(timestamp = datetime.now(),
+        Trade.objects.create(timestamp = timezone.now(),
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
@@ -311,7 +312,7 @@ class TestTrade(SerializerTests):
         self.assertEqual(len([project for project in response.data.get('results')]), 2)
 
     def test_update_trade(self):
-        trade = Trade.objects.create(timestamp = datetime.now(),
+        trade = Trade.objects.create(timestamp = timezone.now(),
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
@@ -327,7 +328,7 @@ class TestTrade(SerializerTests):
         self.assertEqual(trade.brokerage, 54.50)
 
     def test_delete_trade(self):
-        project = Trade.objects.create(timestamp = datetime.now(),
+        project = Trade.objects.create(timestamp = timezone.now(),
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
@@ -340,8 +341,7 @@ class TestTrade(SerializerTests):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Trade.objects.count(), 0)
 
-
-class TestDividend(SerializerTests):
+class TestDividendAPI(SerializerTests):
     def setUp(self):
         super().setUp()
         self.account_bank = Account.objects.create(account_id=1,
@@ -374,10 +374,10 @@ class TestDividend(SerializerTests):
         self.assertEqual(Dividend.objects.get().stock, self.stock)
 
     def test_get_dividend_list(self):
-        Dividend.objects.create(record_date = datetime.today(),
+        Dividend.objects.create(record_date = datetime.datetime.today(),
                                 stock = self.stock,
                                 amount = 5)
-        Dividend.objects.create(record_date = datetime.today(),
+        Dividend.objects.create(record_date = datetime.datetime.today(),
                                 stock = self.stock,
                                 amount = 10)
         url = reverse('portfolio:dividend-list')
@@ -386,7 +386,7 @@ class TestDividend(SerializerTests):
         self.assertEqual(len([project for project in response.data.get('results')]), 2)
 
     def test_update_dividend(self):
-        dividend = Dividend.objects.create(record_date = datetime.today(),
+        dividend = Dividend.objects.create(record_date = datetime.datetime.today(),
                                 stock = self.stock,
                                 amount = 5)
         url = reverse('portfolio:dividend-detail', args=[dividend.id])
@@ -398,7 +398,7 @@ class TestDividend(SerializerTests):
         self.assertEqual(dividend.amount, 6)
 
     def test_delete_dividend(self):
-        dividend = Dividend.objects.create(record_date = datetime.today(),
+        dividend = Dividend.objects.create(record_date = datetime.datetime.today(),
                                 stock = self.stock,
                                 amount = 5)
         url = reverse('portfolio:dividend-detail', args=[dividend.id])

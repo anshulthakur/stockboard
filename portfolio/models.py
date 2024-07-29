@@ -2,8 +2,11 @@ from django.db import models
 from stocks.models import Stock
 from django.contrib.auth.models import User
 
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.db.models import Sum, F, Q, ExpressionWrapper, DecimalField
 from datetime import datetime
+from django.utils import timezone
+
+from collections import deque
 
 # Create your models here.
 class Account(models.Model):
@@ -27,6 +30,49 @@ class Account(models.Model):
     last_updated = models.DateTimeField(auto_now_add=True)
     currency = models.CharField(blank = False, default='INR', max_length=10)
 
+    def get_net_account_value(self, date=None):
+        """
+        Compute the net value of the account at a given date.
+        If no date is provided, use the current date.
+        """
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Sum all transactions up to the given date
+        transactions = Transaction.objects.filter(
+            account=self,
+            timestamp__lte=date
+        ).aggregate(
+            total_credits=Sum('amount', filter=Q(transaction="CR")),
+            total_debits=Sum('amount', filter=Q(transaction="DB"))
+        )
+
+        # Calculate net cash in account
+        net_cash = (transactions['total_credits'] or 0) - (transactions['total_debits'] or 0)
+
+        # Calculate total taxes and brokerage fees across all portfolios
+        trades = Trade.objects.filter(
+            portfolio__account=self,
+            timestamp__lte=date
+        ).aggregate(
+            total_taxes=Sum('tax'),
+            total_brokerage=Sum('brokerage')
+        )
+
+        total_taxes = trades['total_taxes'] or 0
+        total_brokerage = trades['total_brokerage'] or 0
+
+        # Calculate the value of all portfolios
+        portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
+
+        # Net account value
+        net_account_value = net_cash - total_taxes - total_brokerage + portfolio_values
+        return net_account_value
+
 
 class Portfolio(models.Model):
     '''
@@ -40,25 +86,17 @@ class Portfolio(models.Model):
     name = models.CharField(verbose_name="Portfolio name", max_length=50)
     account = models.ForeignKey(Account, null=False, blank=False, on_delete=models.CASCADE)
 
-    def get_portfolio_value(self, date=None):
+    def get_invested_value(self, date=None):
         """
         Compute the value of the portfolio at a given date.
         If no date is provided, use the current date.
         """
         if date is None:
-            date = datetime.now()
+            date = timezone.now()
 
-        # Sum all transactions up to the given date
-        transactions = Transaction.objects.filter(
-            account=self.account,
-            timestamp__lte=date
-        ).aggregate(
-            total_credits=Sum('amount', filter=models.Q(transaction="CR")),
-            total_debits=Sum('amount', filter=models.Q(transaction="DB"))
-        )
-
-        # Calculate net cash in account
-        net_cash = (transactions['total_credits'] or 0) - (transactions['total_debits'] or 0)
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
 
         # Sum all trades up to the given date and calculate portfolio value
         trades = Trade.objects.filter(
@@ -72,16 +110,71 @@ class Portfolio(models.Model):
                 output_field=DecimalField()
             )
         ).aggregate(
-            total_buy=Sum('trade_value', filter=models.Q(operation='BUY')),
-            total_sell=Sum('trade_value', filter=models.Q(operation='SELL'))
+            total_buy=Sum('trade_value', filter=Q(operation='BUY')),
+            total_sell=Sum('trade_value', filter=Q(operation='SELL'))
         )
 
         total_buy_value = stock_values['total_buy'] or 0
         total_sell_value = stock_values['total_sell'] or 0
 
         # Net portfolio value
-        portfolio_value = net_cash + total_buy_value - total_sell_value
+        portfolio_value = total_buy_value - total_sell_value
         return portfolio_value
+    
+    def get_portfolio(self, date=None):
+        """
+        Get the portfolio details as of a given date.
+        Returns a list of tuples containing (stock, quantity, average buy price)
+        for all stocks held in non-zero quantity on the requested date.
+        If no date is provided, use the current date.
+        """
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Get all trades up to the given date
+        trades = Trade.objects.filter(
+            portfolio=self,
+            timestamp__lte=date
+        ).order_by('stock', 'timestamp')
+
+        # Dictionary to hold FIFO purchase history for each stock
+        stock_history = {}
+
+        for trade in trades:
+            if trade.stock not in stock_history:
+                stock_history[trade.stock] = deque()
+
+            if trade.operation == 'BUY':
+                # Add to purchase history with FIFO
+                stock_history[trade.stock].append((trade.quantity, trade.price))
+            elif trade.operation == 'SELL':
+                # Process sale according to FIFO
+                quantity_to_sell = trade.quantity
+                total_cost = 0
+                while quantity_to_sell > 0 and stock_history[trade.stock]:
+                    purchased_quantity, purchase_price = stock_history[trade.stock].popleft()
+                    if purchased_quantity <= quantity_to_sell:
+                        total_cost += purchased_quantity * purchase_price
+                        quantity_to_sell -= purchased_quantity
+                    else:
+                        total_cost += quantity_to_sell * purchase_price
+                        stock_history[trade.stock].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        quantity_to_sell = 0
+
+        # Prepare the result list
+        result = []
+        for stock, history in stock_history.items():
+            quantity = sum(q for q, _ in history)
+            if quantity > 0:
+                total_cost = sum(q * p for q, p in history)
+                average_buy_price = total_cost / quantity
+                result.append((stock, quantity, average_buy_price))
+
+        return result
 
 class Trade(models.Model):
     '''
@@ -100,8 +193,11 @@ class Trade(models.Model):
     price = models.DecimalField(max_digits=20, decimal_places=2)
     operation = models.CharField(choices=TRADE_TYPE_CHOICES, max_length=4)
     portfolio = models.ForeignKey(Portfolio, related_name="portfolio", null=False, blank=False, on_delete=models.CASCADE)
-    tax = models.DecimalField(max_digits = 20, blank=True, decimal_places=2)
-    brokerage = models.DecimalField(max_digits = 20, blank = True, decimal_places=2)
+    tax = models.DecimalField(max_digits = 20, blank=True, decimal_places=2, default=0)
+    brokerage = models.DecimalField(max_digits = 20, blank = True, decimal_places=2, default=0)
+
+    def __str__(self):
+        return "{} {} shares of {} at {}".format(self.operation, self.quantity, self.stock.symbol, self.price)
 
 class Transaction(models.Model):
     '''
@@ -130,25 +226,49 @@ class Dividend(models.Model):
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=20, decimal_places=2)
 
-    def get_total_dividend(self, portfolio, date=None):
+    def __str__(self):
+        return "Dividend {} for {} on {}".format(self.amount, self.stock.symbol, self.record_date)
+
+    @classmethod
+    def get_total_dividend(cls, portfolio, stock, date=None):
         """
-        Compute the total dividend for the portfolio up to a given date.
+        Compute the total dividend for a portfolio and stock up to a given date.
         If no date is provided, use the current date.
         """
         if date is None:
-            date = datetime.now().date()
+            date = timezone.now()
 
-        # Filter trades to get quantities held on record date
-        trades = Trade.objects.filter(
-            portfolio=portfolio,
-            stock=self.stock,
-            timestamp__lte=self.record_date
-        ).aggregate(
-            total_quantity=Sum('quantity', filter=models.Q(operation='BUY')) -
-                           Sum('quantity', filter=models.Q(operation='SELL'))
-        )
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
 
-        total_quantity = trades['total_quantity'] or 0
-        total_dividend = total_quantity * self.amount
+        # Fetch all dividends for the stock
+        dividends = cls.objects.filter(stock=stock, record_date__lte=date)
+
+        total_dividend = 0
+
+        for dividend in dividends:
+            # Make record_date timezone-aware
+            record_date_aware = timezone.make_aware(
+                datetime.combine(dividend.record_date, datetime.min.time())
+            )
+
+            # Filter trades to get quantities held on record date
+            buy_quantity = Trade.objects.filter(
+                portfolio=portfolio,
+                stock=stock,
+                timestamp__lte=record_date_aware,
+                operation='BUY'
+            ).aggregate(total_buy=Sum('quantity'))['total_buy'] or 0
+
+            sell_quantity = Trade.objects.filter(
+                portfolio=portfolio,
+                stock=stock,
+                timestamp__lte=record_date_aware,
+                operation='SELL'
+            ).aggregate(total_sell=Sum('quantity'))['total_sell'] or 0
+
+            total_quantity = buy_quantity - sell_quantity
+            total_dividend += total_quantity * dividend.amount
 
         return total_dividend
