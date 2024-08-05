@@ -496,51 +496,44 @@ def save_scatter_plots(rrg_df, sector='unnamed', sampling = 'w', date=datetime.d
     JDK_RS_momentum = rrg_df[1]
 
     create_directory(f'{plotpath}/{date.strftime("%d-%m-%Y")}/{sampling}/')
-    # Create the DataFrames for Creating the ScaterPlots
-    #Create a Sub-Header to the DataFrame: 'JDK_RS_ratio' -> As later both RS_ratio and RS_momentum will be joint
-    JDK_RS_ratio_subheader = pd.DataFrame(np.zeros((1,JDK_RS_ratio.columns.shape[0])),columns=JDK_RS_ratio.columns, dtype=str)
+    
+    # Create the DataFrames for Creating the ScatterPlots
+    JDK_RS_ratio_subheader = pd.DataFrame(np.zeros((1, JDK_RS_ratio.columns.shape[0])), columns=JDK_RS_ratio.columns, dtype=str)
     JDK_RS_ratio_subheader.iloc[0] = 'JDK_RS_ratio'
-
     JDK_RS_ratio_total = pd.concat([JDK_RS_ratio_subheader, JDK_RS_ratio], axis=0)
 
-    #... same for JDK_RS Momentum
-    JDK_RS_momentum_subheader = pd.DataFrame(np.zeros((1,JDK_RS_momentum.columns.shape[0])),columns=JDK_RS_momentum.columns, dtype=str)
+    JDK_RS_momentum_subheader = pd.DataFrame(np.zeros((1, JDK_RS_momentum.columns.shape[0])), columns=JDK_RS_momentum.columns, dtype=str)
     JDK_RS_momentum_subheader.iloc[0] = 'JDK_RS_momentum'
-
     JDK_RS_momentum_total = pd.concat([JDK_RS_momentum_subheader, JDK_RS_momentum], axis=0)
 
-    #Join both DataFrames
+    # Join both DataFrames
     RRG_df = pd.concat([JDK_RS_ratio_total, JDK_RS_momentum_total], axis=1, sort=True)
     RRG_df = RRG_df.sort_index(axis=1)
     
-    #Create a DataFrame Just with the Last Period Metrics for Plotting the Scatter plot
-    ##Reduce JDK_RS_ratio to 1 (Last) Period
+    # Create a DataFrame with the Last Period Metrics for Plotting the Scatter plot
     JDK_RS_ratio_1P = pd.DataFrame(JDK_RS_ratio.iloc[-1].transpose())
-    JDK_RS_ratio_1P = JDK_RS_ratio_1P.rename(columns= {JDK_RS_ratio_1P.columns[0]: 'JDK_RS_ratio'})
+    JDK_RS_ratio_1P = JDK_RS_ratio_1P.rename(columns={JDK_RS_ratio_1P.columns[0]: 'JDK_RS_ratio'})
     
-    ##Reduce JDK_RS_momentum to 1 (Last) Period
     JDK_RS_momentum_1P = pd.DataFrame(JDK_RS_momentum.iloc[-1].transpose())
-    JDK_RS_momentum_1P = JDK_RS_momentum_1P.rename(columns= {JDK_RS_momentum_1P.columns[0]: 'JDK_RS_momentum'})
+    JDK_RS_momentum_1P = JDK_RS_momentum_1P.rename(columns={JDK_RS_momentum_1P.columns[0]: 'JDK_RS_momentum'})
     
-    #Joining the 2 Dataframes
-    JDK_RS_1P = pd.concat([JDK_RS_ratio_1P,JDK_RS_momentum_1P], axis=1)
+    JDK_RS_1P = pd.concat([JDK_RS_ratio_1P, JDK_RS_momentum_1P], axis=1)
+    JDK_RS_1P = JDK_RS_1P.reset_index()
     
-    ##Reset the Index so the Index's names are in the Scatter
-    JDK_RS_1P = JDK_RS_1P.reset_index() 
-    order = [1,2,0] # setting column's order
+    order = [1, 2, 0]
     JDK_RS_1P = JDK_RS_1P[[JDK_RS_1P.columns[i] for i in order]]
     
-    ##Create a New Column with the Quadrants Indication
     JDK_RS_1P['Quadrant'] = JDK_RS_1P['index']
-    for row in JDK_RS_1P['Quadrant'].index:
-        if JDK_RS_1P['JDK_RS_ratio'][row] > 100 and JDK_RS_1P['JDK_RS_momentum'][row] > 100:
-            JDK_RS_1P['Quadrant'][row] = 'Leading'
-        elif JDK_RS_1P['JDK_RS_ratio'][row] > 100 and JDK_RS_1P['JDK_RS_momentum'][row] < 100:
-            JDK_RS_1P['Quadrant'][row] = 'Lagging'
-        elif JDK_RS_1P['JDK_RS_ratio'][row] < 100 and JDK_RS_1P['JDK_RS_momentum'][row] < 100:
-            JDK_RS_1P['Quadrant'][row] = 'Weakening'
-        elif JDK_RS_1P['JDK_RS_ratio'][row] < 100 and JDK_RS_1P['JDK_RS_momentum'][row] > 100:
-            JDK_RS_1P['Quadrant'][row] = 'Improving'
+    
+    for row in JDK_RS_1P.index:
+        if JDK_RS_1P.loc[row, 'JDK_RS_ratio'] > 100 and JDK_RS_1P.loc[row, 'JDK_RS_momentum'] > 100:
+            JDK_RS_1P.loc[row, 'Quadrant'] = 'Leading'
+        elif JDK_RS_1P.loc[row, 'JDK_RS_ratio'] > 100 and JDK_RS_1P.loc[row, 'JDK_RS_momentum'] < 100:
+            JDK_RS_1P.loc[row, 'Quadrant'] = 'Lagging'
+        elif JDK_RS_1P.loc[row, 'JDK_RS_ratio'] < 100 and JDK_RS_1P.loc[row, 'JDK_RS_momentum'] < 100:
+            JDK_RS_1P.loc[row, 'Quadrant'] = 'Weakening'
+        elif JDK_RS_1P.loc[row, 'JDK_RS_ratio'] < 100 and JDK_RS_1P.loc[row, 'JDK_RS_momentum'] > 100:
+            JDK_RS_1P.loc[row, 'Quadrant'] = 'Improving'
     #Scatter Plot
     #scatter = hv.Scatter(JDK_RS_1P, kdims = ['JDK_RS_ratio', 'JDK_RS_momentum'])
     scatter = hv.Scatter(JDK_RS_1P, kdims = ['JDK_RS_momentum'])
@@ -605,14 +598,14 @@ def save_scatter_plots(rrg_df, sector='unnamed', sampling = 'w', date=datetime.d
         ##Create a New Column with the Quadrants Indication
         joint_table['Quadrant'] = joint_table['index']
         for row in joint_table['Quadrant'].index:
-            if joint_table['JDK_RS_ratio'][row] >= 100 and joint_table['JDK_RS_momentum'][row] >= 100:
-                joint_table['Quadrant'][row] = 'Leading'
-            elif joint_table['JDK_RS_ratio'][row] >= 100 and joint_table['JDK_RS_momentum'][row] <= 100:
-                joint_table['Quadrant'][row] = 'Lagging'
-            elif joint_table['JDK_RS_ratio'][row] <= 100 and joint_table['JDK_RS_momentum'][row] <= 100:
-                joint_table['Quadrant'][row] = 'Weakening'
-            elif joint_table['JDK_RS_ratio'][row] <= 100 and joint_table['JDK_RS_momentum'][row] >= 100:
-                joint_table['Quadrant'][row] = 'Improving'
+            if joint_table.loc[row, 'JDK_RS_ratio'] >= 100 and joint_table.loc[row, 'JDK_RS_momentum'] >= 100:
+                joint_table.loc[row, 'Quadrant'] = 'Leading'
+            elif joint_table.loc[row, 'JDK_RS_ratio'] >= 100 and joint_table.loc[row, 'JDK_RS_momentum'] <= 100:
+                joint_table.loc[row, 'Quadrant'] = 'Lagging'
+            elif joint_table.loc[row,'JDK_RS_ratio'] <= 100 and joint_table.loc[row, 'JDK_RS_momentum'] <= 100:
+                joint_table.loc[row, 'Quadrant'] = 'Weakening'
+            elif joint_table.loc[row, 'JDK_RS_ratio'] <= 100 and joint_table.loc[row, 'JDK_RS_momentum'] >= 100:
+                joint_table.loc[row, 'Quadrant'] = 'Improving'
 
         #Joining the obtained Single Dataframes into the Dicitonary
         multi_df.update({index: joint_table})  
