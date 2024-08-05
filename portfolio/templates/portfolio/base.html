@@ -31,7 +31,7 @@
                             <i class="fs-5 bi-speedometer2"></i><span class="ms-1 d-none d-sm-inline">Dashboard</span> </a>
                     </li>
                     <li>
-                        <a href="{% url "portfolio:accounts-page" %}" class="nav-link px-sm-0 px-2">
+                        <a href="{% url 'portfolio:accounts-page' %}" class="nav-link px-sm-0 px-2">
                             <i class="fs-5 bi-table"></i><span class="ms-1 d-none d-sm-inline">Accounts</span></a>
                     </li>
                     {% for module in entries %}
@@ -40,7 +40,7 @@
                                 <i class="fs-4 bi-bank2"></i> <span class="ms-1 d-none d-sm-inline">{{ module }}</span></a>
                             <ul class="collapse nav flex-column ms-1" id="submenu{{forloop.counter}}" data-bs-parent="#menu">
                                 <li class="w-100">
-                                    <a href="#" class="nav-link px-0"><i class="fs-6 bi-wallet2"></i> <span class="d-none d-sm-inline">Wallet</span></a>
+                                    <a href="{% url 'portfolio:wallet-page' asset_type=module %}" class="nav-link px-0"><i class="fs-6 bi-wallet2"></i> <span class="d-none d-sm-inline">Wallet</span></a>
                                 </li>
                                 <li>
                                     <a href="#" class="nav-link px-0"><i class="fs-6 bi-list"></i> <span class="d-none d-sm-inline">Orders</span></a>

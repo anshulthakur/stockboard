@@ -84,10 +84,11 @@ USE_I18N = True
 USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR,"static"),
+    os.path.join(BASE_DIR,"portfolio/static/portfolio"),
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -104,7 +105,10 @@ RRG_PROGRESS_FILE = os.path.join(PROJECT_DIRS.get('rrg'), ".progress.json")
 WEBPACK_LOADER = {
   "DEFAULT": {
     "BUNDLE_DIR_NAME": "portfolio/",
-    "STATS_FILE": os.path.join(BASE_DIR, "portfolio/webpack-stats.json")
+    "CACHE": not DEBUG,
+    "STATS_FILE": os.path.join(BASE_DIR, "portfolio/webpack-stats.json"),
+    "POLL_INTERVAL": 0.1,
+    "IGNORE": [r'.+\.hot-update.js', r'.+\.map'],
   }
 }
 
