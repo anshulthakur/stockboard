@@ -23,6 +23,14 @@ def accounts(request):
     context = {'entries': enabled_modules,}
     return render(request, "portfolio/accounts.html", context=context)
 
+def wallets(request, asset_type):
+    enabled_modules = {'Stocks': {},
+                       'Crypto': {},
+                       'Commodity': {},
+                       }
+    context = {'entries': enabled_modules,
+               'asset': asset_type}
+    return render(request, "portfolio/wallet.html", context=context)
 
 class UserViewSet(viewsets.ModelViewSet):
     """

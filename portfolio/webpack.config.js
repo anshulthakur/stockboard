@@ -6,12 +6,13 @@ module.exports = {
   entry: {
     overview: './src/overview.js',
     accounts: './src/accounts.js',
+    wallet: './src/wallet.js',
     //webui: '../webui/src/index.js',
   },
   output: {
     path: path.resolve('./static/portfolio/'),
     filename: '[name].bundle.js',
-    publicPath: 'static/portfolio/',
+    publicPath: '/static/portfolio/',
   },
   plugins: [
     new CleanWebpackPlugin(),
