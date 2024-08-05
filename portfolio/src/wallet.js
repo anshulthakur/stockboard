@@ -1,15 +1,91 @@
 // wallet.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+
+import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faChartLine, faChartPie, faMoneyBillWave, faWallet } from '@fortawesome/free-solid-svg-icons';
+
+import DashboardCard from "./components/DashboardCard";
 import WalletComponent from './components/WalletComponent'; // Adjust the path based on your folder structure
+
+import { stockWalletData, cryptoWalletData } from './fixtures';
 
 const getTypeFromURL = () => {
   // Assuming the URL structure is /portfolio/:type/wallet
   const pathArray = window.location.pathname.split('/');
-  return pathArray.includes('crypto') ? 'crypto' : 'stock';
+  return pathArray.includes('Crypto') ? 'crypto' : 'stock';
 };
 
-const type = getTypeFromURL();
+const Wallet = () => {
+  const type = getTypeFromURL();
+  const [data, setData] = useState(type === 'crypto' ? cryptoWalletData : stockWalletData);
+
+  useEffect(() => {
+    console.log('Outer useEffect');
+    const fetchData = type === 'crypto' ? cryptoWalletData : stockWalletData;
+    setData(fetchData);
+  }, [type]);
+
+//   useEffect(() => {
+//     // Fetch wallet data based on type (crypto or stock)
+//     const fetchData = async () => {
+//       try {
+//         const response = await axios.get(`/api/portfolio/${type}/wallet`);
+//         setWalletData(response.data.entries);
+//         setSummaryData(response.data.summary);
+//       } catch (error) {
+//         console.error('Error fetching wallet data:', error);
+//       }
+//     };
+
+//     fetchData();
+//   }, [type]);
+
+  return (
+    <div>
+      <Container className="mt-4">
+        <h2>{type.charAt(0).toUpperCase() + type.slice(1)} Wallet</h2>
+        <Row>
+            <Col md={4} className="mb-3">
+            <DashboardCard title="Cost" 
+                           value={data.summary.cost} 
+                           subtitle={`Current invest: ${data.summary.previousDay}`} 
+                           icon={<FontAwesomeIcon icon={faWallet} size="2x" />}
+                           />
+            </Col>
+            <Col md={4} className="mb-3">
+            <DashboardCard title="Wallet Value" 
+                           value={data.summary.walletValue} 
+                           subtitle={`Previous day: ${data.summary.previousDay}`} 
+                           icon={<FontAwesomeIcon icon={faMoneyBillWave} size="2x" />}
+                           />
+            </Col>
+            <Col md={4} className="mb-3">
+            <DashboardCard title="Current W/L" 
+                           value={data.summary.currentWL} 
+                           subtitle="-80.21%" 
+                           icon={<FontAwesomeIcon icon={faChartLine} size="2x" />} 
+                           />
+            </Col>
+            <Col md={4} className="mb-3">
+            <DashboardCard title="Materialized W/L" 
+                            value={data.summary.materializedWL} 
+                            subtitle="" 
+                            icon={<FontAwesomeIcon icon={faChartPie} size="2x" />} 
+                            />
+            </Col>
+        </Row>
+        <Row>
+          <WalletComponent type={type} data={data} />
+        </Row>
+      </Container>
+    </div>
+  );
+}
 
 const root = createRoot(document.getElementById("app"));
-root.render(<WalletComponent type={type} />);
+root.render(<Wallet />);
