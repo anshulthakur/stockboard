@@ -193,7 +193,10 @@ def get_index_dataframe(name, end_date, duration=300, sampling='w', online=True,
     #print(df_arr)
     #Sleight of hand for now: 
     # The issue is that index df is in format DD-MM-YYYY and others are in DD-MM-YY HH-MM-SS. concat does not add them nicely.
+    if len(df_arr)==0:
+        return pd.DataFrame()
     df = pd.concat(df_arr, axis=1)
+
     #s_df[sector] = df
     #print(df.tail(10))
     df = df[~df.index.duplicated(keep='first')]
