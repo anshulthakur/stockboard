@@ -7,7 +7,7 @@ const DashboardCard = ({ title, value, subtitle, icon }) => {
         <Card className="text-center mb-3">
             <Card.Body>
                 <div className="d-flex align-items-center justify-content-center mb-2">
-                    <i className={`fa ${icon} fa-2x`}></i>
+                    {icon}
                 </div>
                 <Card.Title>{title}</Card.Title>
                 <div>

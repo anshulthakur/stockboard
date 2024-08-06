@@ -19,8 +19,8 @@ const WalletComponent = ({ type, data }) => {
   //   setSearchResults(data);
   // }, [data]);
 
-  console.log('render');
-  console.log(data.entries);
+  //console.log('render');
+  //console.log(data.entries);
   return (
     <div>
       <SearchBar placeholder="Search by symbol" onSearch={handleSearch} />

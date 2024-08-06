@@ -16,7 +16,7 @@ export const stockWalletData = {
         cost: "₹7,543.00",
         be: "₹371.01",
         currentPrice: "₹0.00",
-        value: "₹0.00",
+        value: "₹7,543.00",
         wl: "-₹6,069.00",
         dayChange: "₹0.00",
         preChange: "₹0.00"
@@ -28,7 +28,7 @@ export const stockWalletData = {
         cost: "₹7,543.00",
         be: "₹371.01",
         currentPrice: "₹0.00",
-        value: "₹0.00",
+        value: "₹7,543.00",
         wl: "-₹6,069.00",
         dayChange: "₹0.00",
         preChange: "₹0.00"
