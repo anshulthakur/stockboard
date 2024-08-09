@@ -24,7 +24,9 @@ urlpatterns = [
     path('overview', views.overview, name="portfolio-overview"),
     path('accounts', views.accounts, name="accounts-page"),
     path('<str:asset_type>/wallet', views.wallets, name="wallet-page"),
+    path('<str:asset_type>/orders', views.orderbook, name="orders-page"),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='portfolio:schema'), name='swagger'),
     path("api/", include((router.urls))),
+    path("lander", views.temp, name="landing"),
 ]

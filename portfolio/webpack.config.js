@@ -7,6 +7,7 @@ module.exports = {
     overview: './src/overview.js',
     accounts: './src/accounts.js',
     wallet: './src/wallet.js',
+    orders: './src/orderbook.js',
     //webui: '../webui/src/index.js',
   },
   output: {

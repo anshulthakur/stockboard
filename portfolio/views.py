@@ -7,21 +7,26 @@ from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
 
+def temp(request):
+    return render(request, "portfolio/lander.html", context={})
+
 def overview(request):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},
                        'Commodity': {},
                        }
-    context = {'entries': enabled_modules,}
-    return render(request, "portfolio/overview.html", context=context)
+    context = {'entries': enabled_modules,
+               'module': 'overview', }
+    return render(request, "portfolio/render.html", context=context)
 
 def accounts(request):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},
                        'Commodity': {},
                        }
-    context = {'entries': enabled_modules,}
-    return render(request, "portfolio/accounts.html", context=context)
+    context = {'entries': enabled_modules,
+               'module': 'accounts', }
+    return render(request, "portfolio/render.html", context=context)
 
 def wallets(request, asset_type):
     enabled_modules = {'Stocks': {},
@@ -29,8 +34,19 @@ def wallets(request, asset_type):
                        'Commodity': {},
                        }
     context = {'entries': enabled_modules,
-               'asset': asset_type}
-    return render(request, "portfolio/wallet.html", context=context)
+               'asset': asset_type,
+               'module': 'wallet', }
+    return render(request, "portfolio/render.html", context=context)
+
+def orderbook(request, asset_type):
+    enabled_modules = {'Stocks': {},
+                       'Crypto': {},
+                       'Commodity': {},
+                       }
+    context = {'entries': enabled_modules,
+               'asset': asset_type,
+               'module': 'orders', }
+    return render(request, "portfolio/render.html", context=context)
 
 class UserViewSet(viewsets.ModelViewSet):
     """

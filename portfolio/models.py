@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from collections import deque
 
-# Create your models here.
 class Account(models.Model):
     '''
     An account represents the place where either money or shares/assets rest.
@@ -21,7 +20,11 @@ class Account(models.Model):
     ENTITY_CHOICES = [
     ("BANK", "BANK"),
     ("BRKR", "BROKER"),
-    ("XCNG", "EXCHANGE")
+    ("XCNG", "EXCHANGE"),
+    ("DMAT", "DEMAT"),
+    ("CMDT", "COMMODITY"),
+    ("LOCK", "LOCKER"),
+    ("CRYP", "CRYPTO")
     ]
     account_id = models.BigIntegerField(verbose_name="Account ID", unique=True)
     name = models.CharField(max_length=255, blank = False, null = False)
@@ -201,8 +204,8 @@ class Trade(models.Model):
 
 class Transaction(models.Model):
     '''
-    Money coming into or going out of an account in money form (without anything for exchange)
-    is a transaction. This is simply money deposited or money withdrawn from the account.
+    Asset coming in or going out of an account in any form comprises a transaction.
+    This is simply the asset deposited or asset withdrawn from the account.
     For any demat account, the money has to first come from a bank account before we can
     conduct a trade with that money.
     '''

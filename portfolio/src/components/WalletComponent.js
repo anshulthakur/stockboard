@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import SearchBar from './Layout/SearchBar';
+import PaginationComponent from './Layout/Pagination';
 
 const WalletComponent = ({ type, data }) => {
-  const [searchResults, setSearchResults] = useState(data.entries);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
+  // Filter results based on search query
+  const filteredResults = data.entries.filter(item =>
+    item.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Handle Search
   const handleSearch = (searchTerm) => {
     const results = data.entries.filter(item =>
       item.symbol.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    console.log('handleSearch');
-    console.log(results);
     setSearchResults(results);
+    setCurrentPage(1); // Reset to the first page on a new search
   };
 
   // useState(() => {
@@ -19,11 +27,18 @@ const WalletComponent = ({ type, data }) => {
   //   setSearchResults(data);
   // }, [data]);
 
+  // Pagination Logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredResults.slice(indexOfFirstItem, indexOfLastItem);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
   //console.log('render');
   //console.log(data.entries);
   return (
     <div>
-      <SearchBar placeholder="Search by symbol" onSearch={handleSearch} />
+      <SearchBar placeholder="Search by symbol" searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
       <table className="table table-striped">
         <thead>
           <tr>
@@ -39,21 +54,27 @@ const WalletComponent = ({ type, data }) => {
           </tr>
         </thead>
         <tbody>
-          {searchResults.map(item => (
-            <tr key={item.symbol}>
-              <td>{item.symbol}</td>
-              <td>{item.shares}</td>
-              <td>{item.price}</td>
-              <td>{item.cost}</td>
-              <td>{item.currentPrice}</td>
-              <td>{item.value}</td>
-              <td>{item.wl}</td>
-              <td>{item.dayChange}</td>
-              <td>{item.preChange}</td>
-            </tr>
-          ))}
+          {currentItems.map(item => (
+              <tr key={item.symbol}>
+                <td>{item.symbol}</td>
+                <td>{item.shares}</td>
+                <td>{item.price}</td>
+                <td>{item.cost}</td>
+                <td>{item.currentPrice}</td>
+                <td>{item.value}</td>
+                <td>{item.wl}</td>
+                <td>{item.dayChange}</td>
+                <td>{item.preChange}</td>
+              </tr>
+            ))}
         </tbody>
       </table>
+      <PaginationComponent 
+        itemsPerPage={itemsPerPage} 
+        totalItems={filteredResults.length} 
+        paginate={paginate} 
+        currentPage={currentPage}
+      />
     </div>
   );
 };
