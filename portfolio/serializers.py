@@ -55,6 +55,25 @@ class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
             'account': {'view_name': 'portfolio:account-detail',},
         }
 
+class BulkTradeSerializer(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Trade
+        fields = ['url', 'id', 'timestamp', 'stock', 'quantity',
+                  'price', 'operation', 'portfolio', 'tax',
+                  'brokerage']
+        extra_kwargs = {
+            'url': {'view_name': 'portfolio:trade-detail', 'lookup_field': 'id'},
+            'stock': {'view_name': 'portfolio:stock-detail', 'lookup_field': 'id'},
+            'portfolio': {'view_name': 'portfolio:portfolio-detail', 'lookup_field': 'id'}
+        }
+
+    def create(self, validated_data):
+        trade_ids = [item['id'] for item in validated_data]
+        existing_trades = Trade.objects.filter(id__in=trade_ids).values_list('id', flat=True)
+        new_trades = [Trade(**item) for item in validated_data if item['id'] not in existing_trades]
+        Trade.objects.bulk_create(new_trades)
+        return new_trades
+
 class TradeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Trade

@@ -3,6 +3,7 @@ from django.contrib.auth.models import User, Group
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
+from rest_framework import status
 from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
@@ -147,6 +148,16 @@ class TransactionViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
+class BulkTradeViewSet(viewsets.ModelViewSet):
+    queryset = Trade.objects.all()
+    serializer_class = BulkTradeSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        serializer = self.get_serializer(data=data, many=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class TradeViewSet(viewsets.ModelViewSet):
     queryset = Trade.objects.all().order_by('id')
