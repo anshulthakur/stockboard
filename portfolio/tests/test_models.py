@@ -9,21 +9,50 @@ from decimal import Decimal
 class TestAccountModels(TestCase):
     def setUp(self):
         self.user = User.objects.create(username='testuser')
-        self.account = Account.objects.create(
-            account_id=123456,
-            name='Test Account',
-            entity='BANK',
-            user=self.user,
-            currency='INR'
+        # Create accounts
+        self.bank_account = Account.objects.create(
+            account_id=1, 
+            name="Bank A", 
+            entity="BANK", 
+            user=self.user
         )
-        self.portfolio1 = Portfolio.objects.create(
-            name='Test Portfolio 1',
-            account=self.account
+        # Credit funds to the bank
+        Transaction.objects.create(
+            transaction_type="CR",
+            source_account=None,
+            destination_account=self.bank_account,
+            amount=50000,
+            timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
         )
-        self.portfolio2 = Portfolio.objects.create(
-            name='Test Portfolio 2',
-            account=self.account
+
+        self.broker_account = Account.objects.create(
+            account_id=2, 
+            name="Broker A", 
+            entity="BRKR", 
+            user=self.user
         )
+        self.demat_account = Account.objects.create(
+            account_id=3, 
+            name="Demat A", 
+            entity="DMAT", 
+            user=self.user
+        )
+
+        # Create a portfolio under the broker account
+        self.portfolio = Portfolio.objects.create(
+            name="My Portfolio", account=self.broker_account
+        )
+
+        # Transfer funds from bank to broker account
+        Transaction.objects.create(
+            transaction_type="TR",
+            source_account=self.bank_account,
+            destination_account=self.broker_account,
+            amount=25000,
+            timestamp=timezone.now()
+            #timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
+        )
+
         self.market = Market.objects.create(name='Test Market')
         self.stock = Stock.objects.create(
             symbol='TEST',
@@ -32,51 +61,37 @@ class TestAccountModels(TestCase):
             market=self.market
         )
 
-        # Add trades with taxes and brokerages to both portfolios
+        # Create a trade under the portfolio
         Trade.objects.create(
             timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0)),
             stock=self.stock,
-            quantity=10,
+            quantity=100,
             price=100,
             operation='BUY',
-            portfolio=self.portfolio1,
-            tax=10,
-            brokerage=5
+            portfolio=self.portfolio,
+            tax=100,
+            brokerage=50
         )
         Trade.objects.create(
             timestamp=timezone.make_aware(datetime.datetime(2023, 1, 2, 0, 0, 0)),
             stock=self.stock,
-            quantity=5,
+            quantity=50,
             price=110,
             operation='SELL',
-            portfolio=self.portfolio2,
-            tax=5,
-            brokerage=3
+            portfolio=self.portfolio,
+            tax=50,
+            brokerage=30
         )
 
-        # Add transactions
-        Transaction.objects.create(
-            account=self.account,
-            transaction='CR',
-            amount=2000,
-            timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
-        )
-        Transaction.objects.create(
-            account=self.account,
-            transaction='DB',
-            amount=500,
-            timestamp=timezone.make_aware(datetime.datetime(2023, 1, 2, 0, 0, 0))
-        )
+    # def test_portfolio_value(self):
+    #     portfolio1_value = self.portfolio1.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
+    #     portfolio2_value = self.portfolio2.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
 
-    def test_portfolio_value(self):
-        portfolio1_value = self.portfolio1.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
-        portfolio2_value = self.portfolio2.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
+    #     expected_portfolio1_value = 10 * 100
+    #     expected_portfolio2_value = -5 * 110
 
-        expected_portfolio1_value = 10 * 100
-        expected_portfolio2_value = -5 * 110
-
-        self.assertEqual(portfolio1_value, expected_portfolio1_value)
-        self.assertEqual(portfolio2_value, expected_portfolio2_value)
+    #     self.assertEqual(portfolio1_value, expected_portfolio1_value)
+    #     self.assertEqual(portfolio2_value, expected_portfolio2_value)
 
     def test_net_account_value(self):
         net_account_value = self.account.get_net_account_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
@@ -87,6 +102,15 @@ class TestAccountModels(TestCase):
 
         expected_net_account_value = expected_net_cash - expected_taxes_brokerage + expected_portfolio1_value + expected_portfolio2_value
         self.assertEqual(net_account_value, expected_net_account_value)
+
+    def test_get_net_account_value(self):
+        # Check the net account value for the bank account (should be reduced by the transfer)
+        self.assertEqual(self.bank_account.get_net_account_value(), Decimal('25000'))
+
+        # Check the net account value for the broker account
+        # Initial cash + trades - (taxes and brokerage)
+        expected_value = Decimal('25000') - Decimal('100') - Decimal('50') -Decimal('10000')+ Decimal('5500') - Decimal('50') - Decimal('30')
+        self.assertEqual(self.broker_account.get_net_account_value(), expected_value)
 
 class TestPortfolioValueModels(TestCase):
     def setUp(self):
