@@ -236,10 +236,10 @@ class Portfolio(models.Model):
         for sub in self.sub_portfolios.all():
             for stock in sub.get_portfolio_value(date):
                 sub_portfolio_value += stock[1]*stock[2]
-        print(f'Subportfolio value: {sub_portfolio_value}')
+        #print(f'Subportfolio value: {sub_portfolio_value}')
         #sub_portfolio_value = sum(sub.get_portfolio_value(date) for sub in self.sub_portfolios.all())
         own_value = sum(s[1]*s[2] for s in self.calculate_own_value(date))
-        print(f'Own value: {own_value}')
+        #print(f'Own value: {own_value}')
         return own_value + (sub_portfolio_value or 0)
 
     def add_investment(self, amount):
