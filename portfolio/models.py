@@ -33,6 +33,13 @@ class Account(models.Model):
     parent_account = models.ForeignKey('self', on_delete=models.CASCADE, 
                                        null=True, blank=True,
                                        related_name='sub_accounts')
+    linked_demat_account = models.OneToOneField(
+        'self', 
+        null=True, 
+        blank=True, 
+        on_delete=models.SET_NULL,
+        related_name='linked_broker_account'
+    )
     
     def __str__(self):
         return f"{self.name} - {self.entity}"
@@ -72,6 +79,47 @@ class Account(models.Model):
         net_cash = (transactions['total_credits'] or 0) - (transactions['total_debits'] or 0)
         
         # Calculate total taxes and brokerage fees across all portfolios
+        # trades = Trade.objects.filter(
+        #     portfolio__account__in=accounts,
+        #     timestamp__lte=date
+        # ).aggregate(
+        #     total_taxes=Sum('tax'),
+        #     total_brokerage=Sum('brokerage')
+        # )
+
+        # total_taxes = trades['total_taxes'] or 0
+        # total_brokerage = trades['total_brokerage'] or 0
+
+        # Calculate the value of all portfolios
+        portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
+
+        # print(f"Credits: {transactions['total_credits']}")
+        # print(f"Debits: {transactions['total_debits']}")
+        # print(f"Net cash: {net_cash}")
+        # print(f"Taxes: {total_taxes}")
+        # print(f"Brokerage: {total_brokerage}")
+
+        # print(f"Portfolio: {portfolio_values}")
+        # Net account value
+        net_account_value = net_cash + portfolio_values #- total_taxes - total_brokerage 
+        return net_account_value
+
+    def get_net_taxes_and_brokerages(self, date=None):
+        """
+        Compute the net taxes and brokerages paid until a given date.
+        If no date is provided, use the current date.
+        """
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Get this account and its sub-accounts
+        accounts = [self] + list(self.sub_accounts.all())
+
+        # Calculate total taxes and brokerage fees across all portfolios
         trades = Trade.objects.filter(
             portfolio__account__in=accounts,
             timestamp__lte=date
@@ -83,21 +131,8 @@ class Account(models.Model):
         total_taxes = trades['total_taxes'] or 0
         total_brokerage = trades['total_brokerage'] or 0
 
-        # Calculate the value of all portfolios
-        portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
-
-        print(f"Credits: {transactions['total_credits']}")
-        print(f"Debits: {transactions['total_debits']}")
-        print(f"Net cash: {net_cash}")
-        print(f"Taxes: {total_taxes}")
-        print(f"Brokerage: {total_brokerage}")
-
-        print(f"Portfolio: {portfolio_values}")
-        # Net account value
-        net_account_value = net_cash - total_taxes - total_brokerage + portfolio_values
-        return net_account_value
-
-
+        return {'taxes': total_taxes, 'brokerage': total_brokerage}
+    
 class GlobalPortfolio(models.Model):
     """
     Represents a global view of multiple portfolios, providing a consolidated view.
@@ -181,7 +216,6 @@ class Portfolio(models.Model):
                 total_cost = sum(q * p for q, p in history)
                 average_buy_price = total_cost / quantity
                 result.append((stock, quantity, average_buy_price))
-
         return result
 
     def get_invested_value(self, date=None):
@@ -192,10 +226,10 @@ class Portfolio(models.Model):
         for sub in self.sub_portfolios.all():
             for stock in sub.get_portfolio_value(date):
                 sub_portfolio_value += stock[1]*stock[2]
-        print(f'Subportfolio value: {sub_portfolio_value}')
+        #print(f'Subportfolio value: {sub_portfolio_value}')
         #sub_portfolio_value = sum(sub.get_portfolio_value(date) for sub in self.sub_portfolios.all())
         own_value = sum(s[1]*s[2] for s in self.calculate_own_value(date))
-        print(f'Own value: {own_value}')
+        #print(f'Own value: {own_value}')
         return own_value + (sub_portfolio_value or 0)
     
     def get_portfolio_value(self, date=None):
@@ -254,16 +288,27 @@ class Portfolio(models.Model):
         # Method to add investment directly to this portfolio
         pass
 
+    def get_portfolio(self, date=None):
+        """
+        Fetch the constituents of the portfolio, including any sub-portfolios.
+        """
+        portfolio = self.calculate_own_value(date)
+        for sub in self.sub_portfolios.all():
+            portfolio += sub.get_portfolio_value(date)
+
+        return portfolio
+
 class Trade(models.Model):
     '''
-    Anything bought or sold for money is considered a trade. This effects 
+    Anything bought or sold for money is considered a trade. This affects
     the net value of the portfolio by accounting for the assets other 
     than money in terms of money.
     Buy/Sell equity/futures/options/crypto/commodity
     '''
     TRADE_TYPE_CHOICES = [
-    ("BUY", "BUY"),
-    ("SELL", "SELL")
+        ("BUY", "BUY"),
+        ("SELL", "SELL"),
+        ("SEED", "SEED")
     ]
     timestamp = models.DateTimeField()
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
@@ -271,21 +316,81 @@ class Trade(models.Model):
     price = models.DecimalField(max_digits=20, decimal_places=2)
     operation = models.CharField(choices=TRADE_TYPE_CHOICES, max_length=4)
     portfolio = models.ForeignKey(Portfolio, related_name="portfolio", null=False, blank=False, on_delete=models.CASCADE)
-    tax = models.DecimalField(max_digits = 20, blank=True, decimal_places=2, default=0)
-    brokerage = models.DecimalField(max_digits = 20, blank = True, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=20, blank=True, decimal_places=2, default=0)
+    brokerage = models.DecimalField(max_digits=20, blank=True, decimal_places=2, default=0)
 
     def __str__(self):
         return "{} {} shares of {} at {}".format(self.operation, self.quantity, self.stock.symbol, self.price)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)  # Save the trade first
+        
+        broker_account = self.portfolio.account  # Assume the portfolio is linked to a broker account
+        demat_account = self.portfolio.account.linked_demat_account
+
+        if not demat_account:
+            raise ValueError("No Demat account found for the user.")
+
+        trade_value = self.quantity * self.price
+
+        # Create corresponding transactions
+        if self.operation == "BUY":
+            # Debit from broker account (cash outflow)
+            Transaction.objects.create(
+                transaction_type="DB",
+                source_account=broker_account,
+                amount=trade_value + self.tax + self.brokerage,
+                timestamp=self.timestamp,
+                notes=f"Purchase of {self.quantity} shares of {self.stock.symbol}"
+            )
+
+            # Credit to demat account (stock inflow)
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=demat_account,
+                amount=trade_value,
+                timestamp=self.timestamp,
+                notes=f"Stock credit for {self.quantity} shares of {self.stock.symbol}"
+            )
+
+        elif self.operation == "SELL":
+            # Credit to broker account (cash inflow)
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=broker_account,
+                amount=trade_value - self.tax - self.brokerage,
+                timestamp=self.timestamp,
+                notes=f"Sale of {self.quantity} shares of {self.stock.symbol}"
+            )
+
+            # Debit from demat account (stock outflow)
+            Transaction.objects.create(
+                transaction_type="DB",
+                source_account=demat_account,
+                amount=trade_value,
+                timestamp=self.timestamp,
+                notes=f"Stock debit for {self.quantity} shares of {self.stock.symbol}"
+            )
+        
+        elif self.operation == "SEED":
+            #Seeing the account (or gifted stocks)
+            # Credit to demat account (stock inflow)
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=demat_account,
+                amount=trade_value,
+                timestamp=self.timestamp,
+                notes=f"Stock seeded for {self.quantity} shares of {self.stock.symbol}"
+            )
+
 class Transaction(models.Model):
     """
-    Represents any financial transaction, 
-    whether an external inflow or an internal transfer.
+    Represents any financial transaction, whether an external inflow or an internal transfer.
     """
     TRANSACTION_TYPE_CHOICES = [
         ("CR", "CREDIT"),
         ("DB", "DEBIT"),
-        ("TR", "TRANSFER")  # Adding a type for transfers
+        ("TR", "TRANSFER")
     ]
     
     transaction_type = models.CharField(choices=TRANSACTION_TYPE_CHOICES, max_length=8, db_index=True)
@@ -322,6 +427,7 @@ class Transaction(models.Model):
                 self.destination_account.update_cash_balance(self.amount)
 
         super().save(*args, **kwargs)
+
 
 class Dividend(models.Model):
     '''

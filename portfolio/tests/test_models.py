@@ -25,18 +25,21 @@ class TestAccountModels(TestCase):
             timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
         )
 
-        self.broker_account = Account.objects.create(
-            account_id=2, 
-            name="Broker A", 
-            entity="BRKR", 
-            user=self.user
-        )
         self.demat_account = Account.objects.create(
             account_id=3, 
             name="Demat A", 
             entity="DMAT", 
             user=self.user
         )
+
+        self.broker_account = Account.objects.create(
+            account_id=2, 
+            name="Broker A", 
+            entity="BRKR", 
+            user=self.user,
+            linked_demat_account = self.demat_account
+        )
+        
 
         # Create a portfolio under the broker account
         self.portfolio = Portfolio.objects.create(
@@ -83,48 +86,53 @@ class TestAccountModels(TestCase):
             brokerage=30
         )
 
-    # def test_portfolio_value(self):
-    #     portfolio1_value = self.portfolio1.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
-    #     portfolio2_value = self.portfolio2.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
-
-    #     expected_portfolio1_value = 10 * 100
-    #     expected_portfolio2_value = -5 * 110
-
-    #     self.assertEqual(portfolio1_value, expected_portfolio1_value)
-    #     self.assertEqual(portfolio2_value, expected_portfolio2_value)
-
-    def test_net_account_value(self):
-        net_account_value = self.account.get_net_account_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
-        expected_portfolio1_value = 10 * 100
-        expected_portfolio2_value = -5 * 110
-        expected_net_cash = 2000 - 500
-        expected_taxes_brokerage = 10 + 5 + 5 + 3
-
-        expected_net_account_value = expected_net_cash - expected_taxes_brokerage + expected_portfolio1_value + expected_portfolio2_value
-        self.assertEqual(net_account_value, expected_net_account_value)
-
     def test_get_net_account_value(self):
         # Check the net account value for the bank account (should be reduced by the transfer)
         self.assertEqual(self.bank_account.get_net_account_value(), Decimal('25000'))
 
         # Check the net account value for the broker account
         # Initial cash + trades - (taxes and brokerage)
-        expected_value = Decimal('25000') - Decimal('100') - Decimal('50') -Decimal('10000')+ Decimal('5500') - Decimal('50') - Decimal('30')
+        expected_value = Decimal('25000') - Decimal('100') - Decimal('50') -Decimal('10000')+ Decimal('5500') - Decimal('50') - Decimal('30')+Decimal('5000')
         self.assertEqual(self.broker_account.get_net_account_value(), expected_value)
 
 class TestPortfolioValueModels(TestCase):
     def setUp(self):
         self.user = User.objects.create(username='testuser')
-        self.account = Account.objects.create(
-            account_id=123456,
-            name='Test Account',
-            entity='BANK',
-            user=self.user,
-            currency='INR'
+        # Create accounts
+        self.bank_account = Account.objects.create(
+            account_id=1, 
+            name="Bank A", 
+            entity="BANK", 
+            user=self.user
         )
+        # Credit funds to the bank
+        Transaction.objects.create(
+            transaction_type="CR",
+            source_account=None,
+            destination_account=self.bank_account,
+            amount=50000,
+            timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
+        )
+
+        self.demat_account = Account.objects.create(
+            account_id=3, 
+            name="Demat A", 
+            entity="DMAT", 
+            user=self.user
+        )
+
+        self.broker_account = Account.objects.create(
+            account_id=2, 
+            name="Broker A", 
+            entity="BRKR", 
+            user=self.user,
+            linked_demat_account = self.demat_account
+        )
+        
+
+        # Create a portfolio under the broker account
         self.portfolio = Portfolio.objects.create(
-            name='Test Portfolio',
-            account=self.account
+            name="My Portfolio", account=self.broker_account
         )
         self.market = Market.objects.create(name='Test Market')
         self.stock = Stock.objects.create(
@@ -138,6 +146,16 @@ class TestPortfolioValueModels(TestCase):
             group='',
             face_value=10.0,
             market=self.market
+        )
+
+        # Transfer funds from bank to broker account
+        Transaction.objects.create(
+            transaction_type="TR",
+            source_account=self.bank_account,
+            destination_account=self.broker_account,
+            amount=25000,
+            timestamp=timezone.now()
+            #timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
         )
 
         # Add trades with taxes and brokerages
@@ -184,30 +202,31 @@ class TestPortfolioValueModels(TestCase):
             brokerage=2
         )
 
-
         # Add transactions
         Transaction.objects.create(
-            account=self.account,
-            transaction='CR',
+            transaction_type="TR",
+            source_account=self.bank_account,
+            destination_account=self.broker_account,
             amount=2000,
             timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
         )
         Transaction.objects.create(
-            account=self.account,
-            transaction='DB',
+            transaction_type="TR",
+            source_account=self.broker_account,
+            destination_account=self.bank_account,
             amount=500,
             timestamp=timezone.make_aware(datetime.datetime(2023, 1, 2, 0, 0, 0))
         )
 
     def test_portfolio_value_on_date(self):
         portfolio_value = self.portfolio.get_invested_value(date=timezone.make_aware(datetime.datetime(2023, 1, 3, 0, 0, 0)))
-        expected_value = ((10 * 100)) - ((5 * 110)) + (10*105) + (50*20)
-        self.assertEqual(portfolio_value, expected_value)
+        expected_value = (5 * 100.0) + (10*105.0) + (50*20.0)
+        self.assertEqual(portfolio_value, Decimal(expected_value))
 
     def test_portfolio_value_no_transactions(self):
         new_portfolio = Portfolio.objects.create(
             name='New Portfolio',
-            account=self.account
+            account=self.broker_account
         )
         value = new_portfolio.get_invested_value()
         self.assertEqual(value, 0)
@@ -233,23 +252,59 @@ class TestPortfolioValueModels(TestCase):
 class TestDividendModels(TestCase):
     def setUp(self):
         self.user = User.objects.create(username='testuser')
-        self.account = Account.objects.create(
-            account_id=123456,
-            name='Test Account',
-            entity='BANK',
+        # Create accounts
+        self.bank_account = Account.objects.create(
+            account_id=1, 
+            name="Bank A", 
+            entity="BANK", 
+            user=self.user
+        )
+        # Credit funds to the bank
+        Transaction.objects.create(
+            transaction_type="CR",
+            source_account=None,
+            destination_account=self.bank_account,
+            amount=50000,
+            timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
+        )
+
+        self.demat_account = Account.objects.create(
+            account_id=3, 
+            name="Demat A", 
+            entity="DMAT", 
+            user=self.user
+        )
+
+        self.broker_account = Account.objects.create(
+            account_id=2, 
+            name="Broker A", 
+            entity="BRKR", 
             user=self.user,
-            currency='INR'
+            linked_demat_account = self.demat_account
         )
+        
+
+        # Create a portfolio under the broker account
         self.portfolio = Portfolio.objects.create(
-            name='Test Portfolio',
-            account=self.account
+            name="My Portfolio", account=self.broker_account
         )
+
         self.market = Market.objects.create(name='Test Market')
         self.stock = Stock.objects.create(
             symbol='TEST',
             group='',
             face_value=10.0,
             market=self.market
+        )
+
+        # Transfer funds from bank to broker account
+        Transaction.objects.create(
+            transaction_type="TR",
+            source_account=self.bank_account,
+            destination_account=self.broker_account,
+            amount=25000,
+            timestamp=timezone.now()
+            #timestamp=timezone.make_aware(datetime.datetime(2023, 1, 1, 0, 0, 0))
         )
 
         # Create dividends
@@ -292,7 +347,7 @@ class TestDividendModels(TestCase):
         
         new_portfolio = Portfolio.objects.create(
             name='New Portfolio',
-            account=self.account
+            account=self.broker_account
         )
         total_dividend = Dividend.get_total_dividend(portfolio=new_portfolio, stock=self.stock, date=timezone.make_aware(datetime.datetime(2023, 3, 1, 0, 0, 0)))
         self.assertEqual(total_dividend, 0)
