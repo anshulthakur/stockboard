@@ -75,8 +75,8 @@ class TestAccounts(SerializerTests):
 
         url = reverse('portfolio:account-list')
         data = {'account_id': 1, 
-                'name': 'Zerodha', 
-                'entity': 'BRKR', 
+                'name': 'Canara', 
+                'entity': 'BANK', 
                 'user' : response.data['url'],
                 'currency': 'INR'}
         response = self.client.post(url, data, format='json')
@@ -91,15 +91,24 @@ class TestAccounts(SerializerTests):
                                entity = 'BANK',
                                user = self.test_user,
                                currency = 'INR')
-        Account.objects.create(account_id=2,
+        acc = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+        acc.refresh_from_db()
+
+        Account.objects.create(account_id=3,
                                name='Broker 1',
                                entity = 'BRKR',
                                user = self.test_user,
-                               currency = 'INR')
+                               currency = 'INR',
+                               linked_demat_account = acc)
+        
         url = reverse('portfolio:account-list')
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len([account for account in response.data.get('results')]), 2)
+        self.assertEqual(len([account for account in response.data.get('results')]), 3)
 
     def test_update_account(self):
         account = Account.objects.create(account_id=1,
@@ -133,14 +142,20 @@ class TestPortfolio(SerializerTests):
                                entity = 'BANK',
                                user = self.test_user,
                                currency = 'INR')
-        self.account_broker = Account.objects.create(account_id=2,
+        self.account_demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+        self.account_broker = Account.objects.create(account_id=3,
                                name='Broker 1',
                                entity = 'BRKR',
                                user = self.test_user,
-                               currency = 'INR')
+                               currency = 'INR',
+                               linked_demat_account = self.account_demat)
         
     def test_create_portfolio(self):
-        account_url = reverse("portfolio:account-detail",kwargs={'pk': 2})
+        account_url = reverse("portfolio:account-detail",kwargs={'pk': 3})
         response = self.client.get(account_url)
 
         url = reverse('portfolio:portfolio-list')
@@ -184,11 +199,17 @@ class TestTransaction(SerializerTests):
                                entity = 'BANK',
                                user = self.test_user,
                                currency = 'INR')
-        self.account_broker = Account.objects.create(account_id=2,
+        self.account_demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+        self.account_broker = Account.objects.create(account_id=3,
                                name='Broker 1',
                                entity = 'BRKR',
                                user = self.test_user,
-                               currency = 'INR')
+                               currency = 'INR',
+                               linked_demat_account = self.account_demat)
         self.portfolio = Portfolio.objects.create(name='Portfolio 1', 
                                                   account = self.account_broker)
 
@@ -197,22 +218,24 @@ class TestTransaction(SerializerTests):
         response = self.client.get(account_url)
 
         url = reverse('portfolio:transaction-list')
-        data = {'account': response.data['url'], 
-                'transaction': 'CR',
+        data = {'destination_account': response.data['url'], 
+                'transaction_type': 'CR',
                 'amount': 50000,
-                'timestamp': '2024-06-08T19:50:00.000Z'}
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'notes': 'Initial deposit'}
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Transaction.objects.count(), 1)
         self.assertEqual(Transaction.objects.get().amount, 50000)
 
     def test_get_transaction_list(self):
-        Transaction.objects.create(account = self.account_broker,
-                                   transaction = 'CREDIT',
+        Transaction.objects.create(destination_account = self.account_bank,
+                                   transaction_type = 'CR',
                                    amount = 50000,
                                    timestamp = timezone.now())
-        Transaction.objects.create(account = self.account_broker,
-                                   transaction = 'DEBIT',
+        Transaction.objects.create(source_account = self.account_bank,
+                                   destination_account = self.account_broker,
+                                   transaction_type = 'TR',
                                    amount = 40000,
                                    timestamp = timezone.now())
         url = reverse('portfolio:transaction-list')
@@ -221,8 +244,8 @@ class TestTransaction(SerializerTests):
         self.assertEqual(len([project for project in response.data.get('results')]), 2)
 
     def test_update_transaction(self):
-        transaction = Transaction.objects.create(account = self.account_broker,
-                                                transaction = 'CREDIT',
+        transaction = Transaction.objects.create(destination_account = self.account_bank,
+                                                transaction_type = 'CR',
                                                 amount = 50000,
                                                 timestamp = timezone.now())
         url = reverse('portfolio:transaction-detail', args=[transaction.id])
@@ -233,8 +256,8 @@ class TestTransaction(SerializerTests):
         self.assertEqual(transaction.amount, 60000)
 
     def test_delete_transaction(self):
-        transaction = Transaction.objects.create(account = self.account_broker,
-                                                transaction = 'CREDIT',
+        transaction = Transaction.objects.create(destination_account = self.account_bank,
+                                                transaction_type = 'CR',
                                                 amount = 50000,
                                                 timestamp = timezone.now())
         url = reverse('portfolio:transaction-detail', args=[transaction.id])
@@ -251,20 +274,36 @@ class TestTrade(SerializerTests):
                                entity = 'BANK',
                                user = self.test_user,
                                currency = 'INR')
-        self.account_broker = Account.objects.create(account_id=2,
+        self.account_demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+        self.account_broker = Account.objects.create(account_id=3,
                                name='Broker 1',
                                entity = 'BRKR',
                                user = self.test_user,
-                               currency = 'INR')
+                               currency = 'INR',
+                               linked_demat_account = self.account_demat)
         self.portfolio = Portfolio.objects.create(name='Portfolio 1', 
                                                   account = self.account_broker)
-        
+
         # Create a market
         self.market = Market.objects.create(name="NSE")
         # Create a stock
         self.stock = Stock.objects.create(market=self.market,
                                      symbol = "TATASTEEL",
                                      face_value = 1,)
+        
+        Transaction.objects.create(destination_account = self.account_bank,
+                                   transaction_type = 'CR',
+                                   amount = 50000,
+                                   timestamp = timezone.now())
+        Transaction.objects.create(source_account = self.account_bank,
+                                   destination_account = self.account_broker,
+                                   transaction_type = 'TR',
+                                   amount = 40000,
+                                   timestamp = timezone.now())
 
     def test_create_trade(self):
         pf_url = reverse("portfolio:portfolio-detail",kwargs={'pk': 1})
@@ -349,13 +388,31 @@ class TestDividendAPI(SerializerTests):
                                entity = 'BANK',
                                user = self.test_user,
                                currency = 'INR')
-        
+        self.account_demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+        self.account_broker = Account.objects.create(account_id=3,
+                               name='Broker 1',
+                               entity = 'BRKR',
+                               user = self.test_user,
+                               currency = 'INR',
+                               linked_demat_account = self.account_demat)
+        self.portfolio = Portfolio.objects.create(name='Portfolio 1', 
+                                                  account = self.account_broker)
+
         # Create a market
         self.market = Market.objects.create(name="NSE")
         # Create a stock
         self.stock = Stock.objects.create(market=self.market,
                                      symbol = "TATASTEEL",
                                      face_value = 1,)
+        
+        Transaction.objects.create(destination_account = self.account_bank,
+                                   transaction_type = 'CR',
+                                   amount = 50000,
+                                   timestamp = timezone.now())
         
     def test_create_dividend(self):
         stock_url = reverse("portfolio:stock-detail",kwargs={'pk': 1})

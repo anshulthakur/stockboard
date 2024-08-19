@@ -40,10 +40,13 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Account
         fields = ['url', 'id', 'account_id', 'name', 'entity',
-                  'user', 'currency']
+                  'user', 'currency', 'cash_balance', 'parent_account',
+                  'linked_demat_account']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:account-detail',},
             'user': {'view_name': 'portfolio:user-detail',},
+            'linked_demat_account': {'view_name': 'portfolio:account-detail',},
+            'parent_account': {'view_name': 'portfolio:account-detail',}
         }
 
 class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
@@ -89,11 +92,13 @@ class TradeSerializer(serializers.HyperlinkedModelSerializer):
 class TransactionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Transaction
-        fields = ['url', 'id', 'account', 'transaction', 'amount',
-                  'timestamp']
+        fields = ['url', 'id', 'source_account', 'destination_account',
+                  'transaction_type', 'amount',
+                  'timestamp', 'notes']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:transaction-detail',},
-            'account': {'view_name': 'portfolio:account-detail',},
+            'source_account': {'view_name': 'portfolio:account-detail',},
+            'destination_account': {'view_name': 'portfolio:account-detail',},
         }
 
 class DividendSerializer(serializers.HyperlinkedModelSerializer):

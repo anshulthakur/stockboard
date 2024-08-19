@@ -40,6 +40,11 @@ class Account(models.Model):
         on_delete=models.SET_NULL,
         related_name='linked_broker_account'
     )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['account_id']),
+        ]
     
     def __str__(self):
         return f"{self.name} - {self.entity}"
@@ -77,18 +82,6 @@ class Account(models.Model):
 
         # Calculate net cash in account
         net_cash = (transactions['total_credits'] or 0) - (transactions['total_debits'] or 0)
-        
-        # Calculate total taxes and brokerage fees across all portfolios
-        # trades = Trade.objects.filter(
-        #     portfolio__account__in=accounts,
-        #     timestamp__lte=date
-        # ).aggregate(
-        #     total_taxes=Sum('tax'),
-        #     total_brokerage=Sum('brokerage')
-        # )
-
-        # total_taxes = trades['total_taxes'] or 0
-        # total_brokerage = trades['total_brokerage'] or 0
 
         # Calculate the value of all portfolios
         portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
@@ -98,8 +91,8 @@ class Account(models.Model):
         # print(f"Net cash: {net_cash}")
         # print(f"Taxes: {total_taxes}")
         # print(f"Brokerage: {total_brokerage}")
-
         # print(f"Portfolio: {portfolio_values}")
+
         # Net account value
         net_account_value = net_cash + portfolio_values #- total_taxes - total_brokerage 
         return net_account_value
@@ -249,41 +242,6 @@ class Portfolio(models.Model):
         print(f'Own value: {own_value}')
         return own_value + (sub_portfolio_value or 0)
 
-    # def get_invested_value(self, date=None):
-    #     """
-    #     Compute the value of the portfolio at a given date.
-    #     If no date is provided, use the current date.
-    #     """
-    #     if date is None:
-    #         date = timezone.now()
-
-    #     # Ensure the provided date is timezone-aware
-    #     if timezone.is_naive(date):
-    #         date = timezone.make_aware(date)
-
-    #     # Sum all trades up to the given date and calculate portfolio value
-    #     trades = Trade.objects.filter(
-    #         portfolio=self,
-    #         timestamp__lte=date
-    #     )
-
-    #     stock_values = trades.annotate(
-    #         trade_value=ExpressionWrapper(
-    #             F('quantity') * F('price'),
-    #             output_field=DecimalField()
-    #         )
-    #     ).aggregate(
-    #         total_buy=Sum('trade_value', filter=Q(operation='BUY')),
-    #         total_sell=Sum('trade_value', filter=Q(operation='SELL'))
-    #     )
-
-    #     total_buy_value = stock_values['total_buy'] or 0
-    #     total_sell_value = stock_values['total_sell'] or 0
-
-    #     # Net portfolio value
-    #     portfolio_value = total_buy_value - total_sell_value
-    #     return portfolio_value
-    
     def add_investment(self, amount):
         # Method to add investment directly to this portfolio
         pass
