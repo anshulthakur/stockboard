@@ -8,9 +8,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
 
+from django.contrib.auth.decorators import login_required
+
 def temp(request):
     return render(request, "portfolio/lander.html", context={})
 
+@login_required
 def overview(request):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},
@@ -20,6 +23,7 @@ def overview(request):
                'module': 'overview', }
     return render(request, "portfolio/render.html", context=context)
 
+@login_required
 def accounts(request):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},
@@ -29,6 +33,7 @@ def accounts(request):
                'module': 'accounts', }
     return render(request, "portfolio/render.html", context=context)
 
+@login_required
 def wallets(request, asset_type):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},
@@ -39,6 +44,7 @@ def wallets(request, asset_type):
                'module': 'wallet', }
     return render(request, "portfolio/render.html", context=context)
 
+@login_required
 def orderbook(request, asset_type):
     enabled_modules = {'Stocks': {},
                        'Crypto': {},

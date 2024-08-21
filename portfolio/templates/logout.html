@@ -1,0 +1,17 @@
+<!-- templates/login.html -->
+{% extends "portfolio/base.html" %}
+
+{% block sidebar %}
+{% endblock %}
+
+{% block content %}
+
+<main class="row overflow-auto">
+    <div class="col pt-4">
+        {% csrf_token %}
+        <h1>You have been logged out!</h1>
+        <p>Thank you for using our app. You have been successfully logged out.</p>
+        <a href="{% url 'login' %}">Click here to log in again</a>
+    </div>
+</main>
+{% endblock content %}

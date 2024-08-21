@@ -1,0 +1,32 @@
+<!-- templates/login.html -->
+{% extends "portfolio/base.html" %}
+{% block header %}
+  <title>Login to Findependence</title>
+{% endblock %}
+
+{% block sidebar %}
+{% endblock %}
+
+{% block content %}
+<main class="row overflow-auto">
+    <div class="col pt-4">
+        <h2>Login</h2>
+        <form method="post" action="{% url 'login' %}?next={{ request.GET.next }}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" name="username" id="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" name="password" id="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    
+        {% if form.errors %}
+            <p style="color:red;">Invalid username or password</p>
+        {% endif %}
+    </div>
+</main>
+{% endblock %}
