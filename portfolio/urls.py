@@ -4,8 +4,6 @@ from drf_spectacular.views import SpectacularSwaggerView
 import portfolio.views as views
 from rest_framework import routers
 
-
-
 router = routers.DefaultRouter()
 router.register(r'users', views.UserViewSet, basename='user')
 router.register(r'groups', views.GroupViewSet, basename='group')
@@ -25,6 +23,7 @@ urlpatterns = [
     path('accounts', views.accounts, name="accounts-page"),
     path('<str:asset_type>/wallet', views.wallets, name="wallet-page"),
     path('<str:asset_type>/orders', views.orderbook, name="orders-page"),
+    path('api/user/summary/', views.UserFinancialOverviewView.as_view(), name='net-worth'),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger/', SpectacularSwaggerView.as_view(url_name='portfolio:schema'), name='swagger'),
     path("api/", include((router.urls))),

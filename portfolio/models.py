@@ -2,10 +2,10 @@ from django.db import models
 from stocks.models import Stock
 from django.contrib.auth.models import User
 
-from django.db.models import Sum, F, Q, ExpressionWrapper, DecimalField
+from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, DecimalField
 from datetime import datetime
 from django.utils import timezone
-
+from decimal import Decimal
 from collections import deque
 
 class Account(models.Model):
@@ -96,6 +96,38 @@ class Account(models.Model):
         # Net account value
         net_account_value = net_cash + portfolio_values #- total_taxes - total_brokerage 
         return net_account_value
+    
+    def get_net_invested_value(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+        
+        portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
+
+        return portfolio_values
+    
+    def get_net_gains(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+        
+        buy_sell_data = {
+            'buy_trades': Decimal(0.0),
+            'sell_trades': Decimal(0.0)
+        }
+        for portfolio in self.portfolio_set.all():
+            b_s_data = portfolio.get_net_gains(date)
+            buy_sell_data['buy_trades'] += b_s_data['buy_trades']
+            buy_sell_data['sell_trades'] += b_s_data['sell_trades']
+        
+        buy_sell_data['gains'] = buy_sell_data['sell_trades'] - buy_sell_data['buy_trades']
+        return buy_sell_data
 
     def get_net_taxes_and_brokerages(self, date=None):
         """
@@ -255,6 +287,42 @@ class Portfolio(models.Model):
             portfolio += sub.get_portfolio_value(date)
 
         return portfolio
+    
+    def get_net_gains(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Aggregate buy and sell trades
+        trades = Trade.objects.filter(
+            timestamp__lte=date,
+            portfolio=self
+        ).aggregate(
+            buy_trades=Sum(
+                Case(
+                    When(operation="BUY", then=F('quantity') * F('price')),
+                    output_field=DecimalField(),
+                )
+            ),
+            sell_trades=Sum(
+                Case(
+                    When(operation="SELL", then=F('quantity') * F('price')),
+                    output_field=DecimalField(),
+                )
+            )
+        )
+
+        buy_trades = trades.get('buy_trades', Decimal('0.00')) or Decimal('0.00')
+        sell_trades = trades.get('sell_trades', Decimal('0.00')) or Decimal('0.00')
+
+        return {
+            'buy_trades': buy_trades,
+            'sell_trades': sell_trades
+        }
+
 
 class Trade(models.Model):
     '''

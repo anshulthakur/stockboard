@@ -8,6 +8,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
 
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
 from django.contrib.auth.decorators import login_required
 
 def temp(request):
@@ -223,4 +226,17 @@ class DividendViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+    
+class UserFinancialOverviewView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # The instance is the user, or any object that your serializer needs.
+        user = request.user
+
+        # Pass the instance to the serializer
+        serializer = UserFinancialOverviewSerializer(instance=user, context={'request': request})
+
+        # Return the serialized data
         return Response(serializer.data)

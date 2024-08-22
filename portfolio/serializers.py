@@ -109,3 +109,42 @@ class DividendSerializer(serializers.HyperlinkedModelSerializer):
             'url': {'view_name': 'portfolio:dividend-detail',},
             'stock': {'view_name': 'portfolio:stock-detail',}
         }
+
+class UserFinancialOverviewSerializer(serializers.Serializer):
+    net_worth = serializers.DecimalField(max_digits=20, decimal_places=2)
+    net_gains = serializers.DecimalField(max_digits=20, decimal_places=2)
+    net_invested_value = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_buy_value = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_sell_value = serializers.DecimalField(max_digits=20, decimal_places=2)
+    fiat_liquidity = serializers.DecimalField(max_digits=20, decimal_places=2)
+
+    def to_representation(self, instance):
+        user = self.context['request'].user
+        accounts = Account.objects.filter(user=user)
+        
+        buy_sell_data = {
+            'buy_trades': 0.0,
+            'sell_trades': 0.0,
+            'gains': 0.0
+        }
+        for account in accounts:
+            b_s_data = account.get_net_gains()
+            buy_sell_data['buy_trades'] += b_s_data['buy_trades']
+            buy_sell_data['sell_trades'] += b_s_data['sell_trades']
+            buy_sell_data['gains'] += b_s_data['gains']
+        
+        net_worth = sum(account.get_net_account_value() for account in accounts)
+        net_invested_value = sum(account.get_net_invested_value() for account in accounts)
+        net_gains = buy_sell_data['gains']
+        total_buy_value = buy_sell_data['buy_trades']
+        total_sell_value = buy_sell_data['sell_trades']
+        fiat_liquidity = sum(account.cash_balance for account in accounts if account.entity == 'BANK')
+
+        return {
+            'net_worth': net_worth,
+            'net_gains': net_gains,
+            'net_invested_value': net_invested_value,
+            'total_buy_value': total_buy_value,
+            'total_sell_value': total_sell_value,
+            'fiat_liquidity': fiat_liquidity,
+        }
