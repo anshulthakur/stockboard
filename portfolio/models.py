@@ -15,6 +15,7 @@ class Account(models.Model):
     """
     ENTITY_CHOICES = [
         ("BANK", "Bank Account"),
+        ("DPST", "Deposit Account"),
         ("BRKR", "Brokerage Account"),
         ("XCNG", "Exchange Account"),
         ("DMAT", "Demat Account"),
@@ -29,7 +30,7 @@ class Account(models.Model):
     user = models.ForeignKey(User, null=False, blank=False, on_delete=models.CASCADE)
     last_updated = models.DateTimeField(auto_now_add=True)
     currency = models.CharField(blank=False, default='INR', max_length=10)
-    cash_balance = models.DecimalField(max_digits=20, decimal_places=2, default=0)  # Tracks cash balance
+    cash_balance = models.DecimalField(max_digits=20, decimal_places=2, default=0, blank=True)  # Tracks cash balance
     parent_account = models.ForeignKey('self', on_delete=models.CASCADE, 
                                        null=True, blank=True,
                                        related_name='sub_accounts')
@@ -61,6 +62,7 @@ class Account(models.Model):
         Compute the net value of the account at a given date.
         If no date is provided, use the current date.
         """
+        print('get_net_account_value')
         if date is None:
             date = timezone.now()
 
@@ -98,6 +100,18 @@ class Account(models.Model):
         return net_account_value
     
     def get_net_invested_value(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+        
+        portfolio_values = sum(portfolio.get_invested_value(date) for portfolio in self.portfolio_set.all())
+
+        return portfolio_values
+    
+    def get_net_portfolio_value(self, date=None):
         if date is None:
             date = timezone.now()
 
@@ -418,7 +432,7 @@ class Transaction(models.Model):
         ("DB", "DEBIT"),
         ("TR", "TRANSFER")
     ]
-    
+    transaction_id = models.CharField(max_length=20, db_index=True, null=True, blank=True)
     transaction_type = models.CharField(choices=TRANSACTION_TYPE_CHOICES, max_length=8, db_index=True)
     source_account = models.ForeignKey(Account, related_name='outgoing_transactions', on_delete=models.CASCADE, null=True, blank=True)
     destination_account = models.ForeignKey(Account, related_name='incoming_transactions', on_delete=models.CASCADE, null=True, blank=True)
@@ -437,7 +451,7 @@ class Transaction(models.Model):
         if self.transaction_type == "TR":
             return f"Transfer of {self.amount} from {self.source_account.name} to {self.destination_account.name} on {self.timestamp}"
         else:
-            return f"{self.get_transaction_type_display()} of {self.amount} to {self.destination_account.name} on {self.timestamp} from {self.source_account.name if self.source_account else 'External'}"
+            return f"{self.get_transaction_type_display()} of {self.amount} to {self.destination_account.name if self.destination_account else 'External'} on {self.timestamp} from {self.source_account.name if self.source_account else 'External'}"
     
     def save(self, *args, **kwargs):
         if self.transaction_type == "CR" and self.destination_account:

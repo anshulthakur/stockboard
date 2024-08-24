@@ -2,6 +2,10 @@
 {% load render_bundle from webpack_loader %}
 
 {% block content %}
+    <script type="text/javascript">
+        // Make the CSRF token available as a JavaScript variable
+        const csrftoken = "{{ csrf_token }}";
+    </script>
     <main class="row overflow-auto">
         <div class="col pt-4">
             <div id="app" class="position-relative"></div>

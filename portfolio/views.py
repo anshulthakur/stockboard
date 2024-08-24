@@ -105,6 +105,15 @@ class AccountViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        print("perform_create")
+        serializer.save(user=self.request.user)
+
+    def get_serializer_context(self):
+        print("get_serializer_context")
+        # Pass the request context to the serializer
+        return {'request': self.request}
 
 class PortfolioViewSet(viewsets.ModelViewSet):
     queryset = Portfolio.objects.all().order_by('id')
@@ -126,6 +135,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
+    filterset_fields = ['source_account', 'destination_account', 'transaction_type', 'timestamp']
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -134,20 +144,20 @@ class TransactionViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    filterset_fields = ['timestamp']
-
     def get_queryset(self):
         queryset = self.queryset
         #print(self.request.query_params)
+        account_id = self.request.query_params.get('account_id')
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
-
+        
+        if account_id:
+            queryset = queryset.filter(source_account_id=account_id) | queryset.filter(destination_account_id=account_id)
         if date_start_filter:
             # Filter tasks by 'date_started'
             queryset = queryset.filter(timestamp__geq=date_start_filter)
         if date_end_filter:
             queryset = queryset.filter(timestamp__leq=date_end_filter)
-
         return queryset
     
     def partial_update(self, request, *args, **kwargs):

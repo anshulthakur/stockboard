@@ -15,5 +15,12 @@ Test Cases:
 
 * User goes to Accounts page from Menu and finds no accounts. Clicks on a button to add new account, and sees a form. Fills the form and an account is created. The page now shows the account summary card and the add account option.
 * The user adds other accounts, such as broker, demat, crypto etc.
+  - Test that the user cannot add money to demat
+  - Test that demat account cannot be created directly. It is always created with a broker's account
+  - Test that the user cannot add cash balance (it is a read-only field)
+
 * In each account, the user sees the transactions tab. Can visit the transactions tab to see a short pass-book (initially empty). Plus, a button to add new transaction is available. The user clicks on it and a menu pops up with fields rendered according to the account type. An option to upload bulk transactions for the account is also available. The user uploads a transaction file and the account details are updated.
+
+Since the transactions may be loaded from external sources, the transaction IDs may be different for each. There should be no duplication of transactions based on transaction IDs. However, the transaction IDs are optional.
+
 * The overview page starts showing summary information.

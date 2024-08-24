@@ -74,6 +74,7 @@ class TestAccounts(SerializerTests):
         response = self.client.get(url)
 
         url = reverse('portfolio:account-list')
+        print(url)
         data = {'account_id': 1, 
                 'name': 'Canara', 
                 'entity': 'BANK', 

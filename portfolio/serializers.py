@@ -2,6 +2,7 @@ from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 from portfolio.models import Account, Portfolio, Trade, Transaction, Dividend
 from stocks.models import Stock, Market
+from decimal import Decimal
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -37,18 +38,33 @@ class StockSerializer(serializers.HyperlinkedModelSerializer):
         }
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
+    net_account_value = serializers.SerializerMethodField()
     class Meta:
         model = Account
         fields = ['url', 'id', 'account_id', 'name', 'entity',
                   'user', 'currency', 'cash_balance', 'parent_account',
-                  'linked_demat_account']
+                  'linked_demat_account', 'net_account_value']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:account-detail',},
-            'user': {'view_name': 'portfolio:user-detail',},
+            'user': {'view_name': 'portfolio:user-detail', 'required': False},
             'linked_demat_account': {'view_name': 'portfolio:account-detail',},
-            'parent_account': {'view_name': 'portfolio:account-detail',}
+            'parent_account': {'view_name': 'portfolio:account-detail',},
+            'cash_balance': {'required': False},  # Marking cash_balance as optional
         }
+    
+    def create(self, validated_data):
+        print("create")
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            print('set user')
+            validated_data['user'] = request.user
+        else:
+            raise serializers.ValidationError("User is required.")
+        return super().create(validated_data)
 
+    def get_net_account_value(self, obj):
+        return obj.get_net_account_value()
+    
 class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Portfolio
@@ -94,7 +110,7 @@ class TransactionSerializer(serializers.HyperlinkedModelSerializer):
         model = Transaction
         fields = ['url', 'id', 'source_account', 'destination_account',
                   'transaction_type', 'amount',
-                  'timestamp', 'notes']
+                  'timestamp', 'notes', 'transaction_id']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:transaction-detail',},
             'source_account': {'view_name': 'portfolio:account-detail',},
@@ -123,9 +139,9 @@ class UserFinancialOverviewSerializer(serializers.Serializer):
         accounts = Account.objects.filter(user=user)
         
         buy_sell_data = {
-            'buy_trades': 0.0,
-            'sell_trades': 0.0,
-            'gains': 0.0
+            'buy_trades': Decimal(0.0),
+            'sell_trades': Decimal(0.0),
+            'gains': Decimal(0.0)
         }
         for account in accounts:
             b_s_data = account.get_net_gains()
@@ -138,7 +154,7 @@ class UserFinancialOverviewSerializer(serializers.Serializer):
         net_gains = buy_sell_data['gains']
         total_buy_value = buy_sell_data['buy_trades']
         total_sell_value = buy_sell_data['sell_trades']
-        fiat_liquidity = sum(account.cash_balance for account in accounts if account.entity == 'BANK')
+        fiat_liquidity = sum(account.cash_balance for account in accounts if account.entity not in ['DPST'])
 
         return {
             'net_worth': net_worth,

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Table from 'react-bootstrap/Table';
+import axios from 'axios';
 
 var account_transactions = [
     {
@@ -17,7 +18,20 @@ var account_transactions = [
   ];
 
 const Transactions = ({account_id}) => {
-    let transactions = account_transactions;
+    const [transactions, setTransactions] = useState([]);
+
+    useEffect(() => {
+        axios.get(`/portfolio/api/transactions/?account_id=${account_id}`)
+            .then(response => {
+                console.log(response.data);
+                if (response.data.count != 0){
+                    setTransactions(response.data.results);
+                }
+            })
+            .catch(error => {
+                console.error("There was an error fetching the transactions!", error);
+            });
+    }, [account_id]);
 
     return (
         <Table responsive striped bordered hover>
@@ -33,7 +47,7 @@ const Transactions = ({account_id}) => {
             <tbody>
             {transactions.map((transaction, t_id) => (
                 <tr key={t_id}>
-                    <td>{t_id}</td>
+                    <td>{t_id + 1}</td>
                     <td>{transaction.datetime}</td>
                     <td>{transaction.info}</td>
                     <td>{transaction.debit}</td>

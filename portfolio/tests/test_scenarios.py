@@ -199,3 +199,38 @@ class TestMiscellaneous(BaseTest):
         These test cases cover a wide range of functionalities, ensuring that the financial portfolio portal is robust and reliable. You can prune or refine this list based on the specific features you prioritize in the development process.
     '''
     pass
+
+class TestInteraction(BaseTest):
+    '''
+    Interaction/UX based tests
+    '''
+    def test_login_on_unauthenticated(self):
+        '''
+        User must be redirected to login page if not authenticated
+        '''
+        pass
+
+    def test_login_redirect_on_authenticate_no_next(self):
+        '''
+        If no `next` is passed, redirect to the overview page
+        '''
+        pass
+
+    def test_login_redirect_on_authenticate_with_next(self):
+        '''
+        Redirect to the URL user was trying to visit before being redirected to login page
+        '''
+        pass
+
+    def test_unconfigured_profile_overview_balances(self):
+        '''
+        Default balances shown on the overview page must not give errors if no
+        accounts are created for the user yet
+        '''
+        pass
+
+    def test_configured_profile_overview_balances(self):
+        '''
+        Proper balances must be shown on the overview page when accounts are configured
+        '''
+        pass
