@@ -19,7 +19,11 @@ Test Cases:
   - Test that demat account cannot be created directly. It is always created with a broker's account
   - Test that the user cannot add cash balance (it is a read-only field)
 
-* In each account, the user sees the transactions tab. Can visit the transactions tab to see a short pass-book (initially empty). Plus, a button to add new transaction is available. The user clicks on it and a menu pops up with fields rendered according to the account type. An option to upload bulk transactions for the account is also available. The user uploads a transaction file and the account details are updated.
+* In each account, the user sees the transactions tab. Can visit the transactions tab to see a short pass-book (initially empty). Plus, a button to add new transaction is available. The user clicks on it and a menu pops up with fields rendered according to the account type. An option to upload bulk transactions for the account is also available. 
+  - The user creates a series of transactions
+  - The user uploads a transaction file and the account details are updated.
+
+  - Test that there is never a negative balance in the account whether the transactions are added manually or via a bulk file.
 
 Since the transactions may be loaded from external sources, the transaction IDs may be different for each. There should be no duplication of transactions based on transaction IDs. However, the transaction IDs are optional.
 

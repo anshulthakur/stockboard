@@ -107,11 +107,9 @@ class AccountViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        print("perform_create")
         serializer.save(user=self.request.user)
 
     def get_serializer_context(self):
-        print("get_serializer_context")
         # Pass the request context to the serializer
         return {'request': self.request}
 

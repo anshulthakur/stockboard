@@ -16,38 +16,17 @@ import Modal from 'react-bootstrap/Modal';
 
 import axios from "axios";
 axios.defaults.headers.common['X-CSRFToken'] = csrftoken;
-var account_fixtures = [
-  {
-    account_id: 1,
-    name: 'Canara',
-    entity: 'BANK',
-    currency: 'INR',
-    amount: 1234
-  },
-  {
-    account_id: 2,
-    name: 'Zerodha',
-    entity: 'BROKER',
-    currency: 'INR',
-    amount: 2345
-  },
-  {
-    account_id: 3,
-    name: 'WazirX',
-    entity: 'EXCHANGE',
-    currency: 'INR',
-    amount: 1234
-  },
-];
 
 const Accounts = () => {
     const [accounts, setAccounts] = useState([]);
     const [showTransactionForm, setShowTransactionForm] = useState(false);
     const [showAccountForm, setShowAccountForm] = useState(false);
     const [currentAccountUrl, setCurrentAccountUrl] = useState(null);
+    //const [transactions, setTransactions] = useState([]);
+    const [transactionsByAccount, setTransactionsByAccount] = useState({});
 
     const transactionFormShow = (accountUrl) => {
-      //console.log(accountUrl);
+      console.log('transactionFormShow');
       setCurrentAccountUrl(accountUrl);
       setShowTransactionForm(true);
     }
@@ -66,7 +45,27 @@ const Accounts = () => {
               console.error("There was an error fetching the accounts!", error);
           });
     }, []);
-    
+
+    const fetchTransactions = (accountId) => {
+      if (!transactionsByAccount[accountId]) {
+        axios.get(`/portfolio/api/transactions/?account_id=${accountId}`)
+          .then(response => {
+            if (response.data.count !== 0) {
+              console.log(response.data.results);
+              setTransactionsByAccount(prevState => ({
+                ...prevState,
+                [accountId]: response.data.results
+              }));
+            }
+          })
+          .catch(error => {
+            console.error("There was an error fetching the transactions!", error);
+          });
+      } //else {
+        //setTransactions(transactionsByAccount[accountId]);
+      //}
+    };
+
     const accountFormShow = () => setShowAccountForm(true);
     const accountFormHide = () => setShowAccountForm(false);
 
@@ -91,8 +90,10 @@ const Accounts = () => {
       }
     };
 
-    const handleTransactionAdded = (newTransaction) => {
-      // You can update the transactions list here or trigger a refetch in the Transactions component
+    const handleTransactionAdded = () => {
+      // Refresh the transaction list after adding a new transaction
+      console.log('handleTransactionAdded');
+      fetchTransactions(currentAccountUrl.split('/').slice(-2, -1)[0]);
     };
 
     return (
@@ -130,15 +131,21 @@ const Accounts = () => {
                                       </tbody>
                                   </Table>
                               </Tab>
-                              <Tab eventKey={`transactions-${index}`} title="Transactions">
-                                  <Transactions account_id={account.id} />
-                                  <Row className="justify-content-end mt-2">
-                                      <Col xs={12} md={3}>
-                                          <Button variant="primary" align="end" onClick={() => transactionFormShow(account.url)}>
-                                              Add transactions
-                                          </Button>{' '}
-                                      </Col>
-                                  </Row>
+                              <Tab eventKey={`transactions-${index}`} 
+                                    title="Transactions" 
+                                    onEnter={() => fetchTransactions(account.id)}>
+                                <Transactions 
+                                  account_id={account.id} 
+                                  transactions={transactionsByAccount[account.id] || []} 
+                                  fetchTransactions={fetchTransactions} 
+                                />
+                                <Row className="justify-content-end mt-2">
+                                    <Col xs={12} md={3}>
+                                        <Button variant="primary" align="end" onClick={() => transactionFormShow(account.url)}>
+                                            Add transactions
+                                        </Button>{' '}
+                                    </Col>
+                                </Row>
                               </Tab>
                           </Tabs>
                       </Accordion.Body>
@@ -151,15 +158,19 @@ const Accounts = () => {
               </Nav.Item>
           </Nav>
           <Modal show={showTransactionForm} onHide={transactionFormHide}>
-              <Modal.Header closeButton>
-                  <Modal.Title>Add transaction</Modal.Title>
-              </Modal.Header>
-              <Modal.Body>
-                  <TransactionForm account_url={currentAccountUrl} onTransactionAdded={handleTransactionAdded} />
-              </Modal.Body>
-              <Modal.Footer>
-                  <Button variant="secondary" onClick={transactionFormHide}>Close</Button>
-              </Modal.Footer>
+            <Modal.Header closeButton>
+              <Modal.Title>Add transaction</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <TransactionForm 
+                account_url={currentAccountUrl} 
+                onTransactionAdded={handleTransactionAdded} 
+                onClose={transactionFormHide} 
+              />
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="secondary" onClick={transactionFormHide}>Close</Button>
+            </Modal.Footer>
           </Modal>
           <Modal show={showAccountForm} onHide={accountFormHide}>
               <Modal.Header closeButton>

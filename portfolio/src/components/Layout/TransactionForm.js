@@ -5,7 +5,7 @@ import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-function TransactionForm({ account_url, onTransactionAdded }) {
+function TransactionForm({ account_url, onTransactionAdded, onClose }) {
   const [transactionData, setTransactionData] = useState({
     amount: "",
     transaction_type: "DB",
@@ -24,9 +24,9 @@ function TransactionForm({ account_url, onTransactionAdded }) {
     setTransactionData({ ...transactionData, timestamp: date });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e, addAnother = false) => {
     e.preventDefault();
-    console.log(account_url);
+    
     // Adjust source and destination accounts based on transaction type
     if (transactionData.transaction_type === "CR") {
       transactionData.source_account = null;
@@ -39,6 +39,22 @@ function TransactionForm({ account_url, onTransactionAdded }) {
     axios.post('/portfolio/api/transactions/', transactionData)
       .then(response => {
         onTransactionAdded(response.data); // Notify parent component of the new transaction
+        
+        if (addAnother) {
+          // Clear the form but keep the modal open
+          setTransactionData({
+            amount: "",
+            transaction_type: "DB",
+            notes: "",
+            transaction_id: "",
+            timestamp: new Date(),
+            source_account: account_url,
+            destination_account: "",
+          });
+        } else {
+          // Close the modal
+          onClose();
+        }
       })
       .catch(error => {
         console.error("There was an error posting the transaction!", error);
@@ -46,7 +62,7 @@ function TransactionForm({ account_url, onTransactionAdded }) {
   };
 
   return (
-    <Form onSubmit={handleSubmit}>
+    <Form onSubmit={(e) => handleSubmit(e, false)}>
       <Form.Group className="mb-3" controlId="tf-tid">
         <Form.Label>Transaction ID</Form.Label>
         <Form.Control
@@ -124,6 +140,9 @@ function TransactionForm({ account_url, onTransactionAdded }) {
 
       <Button variant="primary" type="submit">
         Add Transaction
+      </Button>
+      <Button variant="secondary" onClick={(e) => handleSubmit(e, true)} className="ms-2">
+        Save and Add Another
       </Button>
     </Form>
   );

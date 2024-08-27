@@ -62,7 +62,6 @@ class Account(models.Model):
         Compute the net value of the account at a given date.
         If no date is provided, use the current date.
         """
-        print('get_net_account_value')
         if date is None:
             date = timezone.now()
 

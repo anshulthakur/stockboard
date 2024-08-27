@@ -53,10 +53,8 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
         }
     
     def create(self, validated_data):
-        print("create")
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            print('set user')
             validated_data['user'] = request.user
         else:
             raise serializers.ValidationError("User is required.")
