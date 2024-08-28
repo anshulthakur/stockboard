@@ -1,13 +1,17 @@
-import React, { useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
+import { AccountsContext } from "./AccountsContext";
 
 const AccountForm = ({ onSubmit, onClose }) => {
+  const { accounts } = useContext(AccountsContext);
   const [accountData, setAccountData] = useState({
     name: "",
     entity: "",
     currency: "INR",
     account_id: "",
+    linked_demat_account: "",
+    parent_account: ""
   });
 
   const handleChange = (e) => {
@@ -15,10 +19,14 @@ const AccountForm = ({ onSubmit, onClose }) => {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(accountData);
-    onClose(); // Close the modal after submission
+      e.preventDefault();
+      onSubmit(accountData);
+      onClose(); // Close the modal after submission
   };
+
+  const filteredDematAccounts = accounts.filter(account => account.entity === 'DMAT');
+  const filteredBankAccounts = accounts.filter(account => account.entity === 'BANK');
+
 
   return (
     <Form onSubmit={handleSubmit}>
@@ -57,10 +65,51 @@ const AccountForm = ({ onSubmit, onClose }) => {
         >
           <option value="">Select entity</option>
           <option value="BANK">Bank</option>
-          <option value="BROKER">Broker</option>
-          <option value="EXCHANGE">Exchange</option>
+          <option value="BRKR">Broker</option>
+          <option value="DMAT">Demat</option>
+          <option value="XCNG">Exchange</option>
+          <option value="DPST">Deposit</option>
+          <option value="SUB">Virtual account</option>
         </Form.Control>
       </Form.Group>
+
+      {accountData.entity === "BRKR" && (
+        <Form.Group className="mb-3" controlId="formLinkedDematAccount">
+          <Form.Label>Linked Demat Account</Form.Label>
+          <Form.Control
+            as="select"
+            name="linked_demat_account"
+            value={accountData.linked_demat_account}
+            onChange={handleChange}
+          >
+            <option value="">Select Demat Account</option>
+            {filteredDematAccounts.map(account => (
+              <option key={account.id} value={account.url}>
+                  {account.name}
+              </option>
+            ))}
+          </Form.Control>
+        </Form.Group>
+      )}
+
+      {accountData.entity === "SUB" && (
+        <Form.Group className="mb-3" controlId="formParentAccount">
+          <Form.Label>Parent Account</Form.Label>
+          <Form.Control
+            as="select"
+            name="parent_account"
+            value={accountData.parent_account}
+            onChange={handleChange}
+          >
+            <option value="">Select Parent Account</option>
+            {filteredBankAccounts.map(account => (
+              <option key={account.id} value={account.url}>
+                  {account.name}
+              </option>
+            ))}
+          </Form.Control>
+        </Form.Group>
+      )}
 
       <Form.Group className="mb-3" controlId="formAccountCurrency">
         <Form.Label>Currency</Form.Label>
@@ -73,18 +122,6 @@ const AccountForm = ({ onSubmit, onClose }) => {
           required
         />
       </Form.Group>
-
-      {/* <Form.Group className="mb-3" controlId="formCashBalance">
-        <Form.Label>Cash Balance</Form.Label>
-        <Form.Control
-          type="number"
-          name="cash_balance"
-          value={accountData.cash_balance}
-          onChange={handleChange}
-          placeholder="Enter cash balance"
-          required
-        />
-      </Form.Group> */}
 
       <Button variant="primary" type="submit">
         Add Account

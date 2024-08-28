@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Dashboard from './components/Layout/Dashboard';
 import Transactions from "./components/Layout/Transactions";
@@ -14,37 +14,25 @@ import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 import Modal from 'react-bootstrap/Modal';
 
+import { AccountsContext, AccountsProvider } from "./components/AccountsContext";
+
 import axios from "axios";
 axios.defaults.headers.common['X-CSRFToken'] = csrftoken;
 
 const Accounts = () => {
-    const [accounts, setAccounts] = useState([]);
+    const { accounts, setAccounts } = useContext(AccountsContext); // Access accounts data
     const [showTransactionForm, setShowTransactionForm] = useState(false);
     const [showAccountForm, setShowAccountForm] = useState(false);
-    const [currentAccountUrl, setCurrentAccountUrl] = useState(null);
+    const [currentAccount, setCurrentAccount] = useState(null);
     //const [transactions, setTransactions] = useState([]);
     const [transactionsByAccount, setTransactionsByAccount] = useState({});
 
-    const transactionFormShow = (accountUrl) => {
+    const transactionFormShow = (account) => {
       console.log('transactionFormShow');
-      setCurrentAccountUrl(accountUrl);
+      setCurrentAccount(account);
       setShowTransactionForm(true);
     }
     const transactionFormHide = () => setShowTransactionForm(false);
-
-    // Fetch account data from the API
-    useEffect(() => {
-      axios.get('/portfolio/api/accounts/')
-          .then(response => {
-              console.log(response);
-              if (response.data.count != 0){
-                setAccounts(response.data.results);
-              }
-          })
-          .catch(error => {
-              console.error("There was an error fetching the accounts!", error);
-          });
-    }, []);
 
     const fetchTransactions = (accountId) => {
       if (!transactionsByAccount[accountId]) {
@@ -82,7 +70,6 @@ const Accounts = () => {
     
         // Update the state with the new account
         setAccounts([...accounts, createdAccount]);
-    
         // Optionally, handle any other success logic here
       } catch (error) {
         // Handle errors, e.g., display an error message to the user
@@ -93,7 +80,7 @@ const Accounts = () => {
     const handleTransactionAdded = () => {
       // Refresh the transaction list after adding a new transaction
       console.log('handleTransactionAdded');
-      fetchTransactions(currentAccountUrl.split('/').slice(-2, -1)[0]);
+      fetchTransactions(currentAccount.url.split('/').slice(-2, -1)[0]);
     };
 
     return (
@@ -135,13 +122,13 @@ const Accounts = () => {
                                     title="Transactions" 
                                     onEnter={() => fetchTransactions(account.id)}>
                                 <Transactions 
-                                  account_id={account.id} 
+                                  account={account} 
                                   transactions={transactionsByAccount[account.id] || []} 
                                   fetchTransactions={fetchTransactions} 
                                 />
                                 <Row className="justify-content-end mt-2">
                                     <Col xs={12} md={3}>
-                                        <Button variant="primary" align="end" onClick={() => transactionFormShow(account.url)}>
+                                        <Button variant="primary" align="end" onClick={() => transactionFormShow(account)}>
                                             Add transactions
                                         </Button>{' '}
                                     </Col>
@@ -163,7 +150,7 @@ const Accounts = () => {
             </Modal.Header>
             <Modal.Body>
               <TransactionForm 
-                account_url={currentAccountUrl} 
+                account_url={currentAccount} 
                 onTransactionAdded={handleTransactionAdded} 
                 onClose={transactionFormHide} 
               />
@@ -185,4 +172,6 @@ const Accounts = () => {
   }
 
 const root = createRoot(document.getElementById("app"));
-root.render(<Accounts />);
+root.render(<AccountsProvider>
+  <Accounts />
+</AccountsProvider>);

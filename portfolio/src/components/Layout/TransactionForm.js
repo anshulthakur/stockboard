@@ -1,18 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useState } from 'react';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { AccountsContext
 
-function TransactionForm({ account_url, onTransactionAdded, onClose }) {
+ } from '../AccountsContext';
+function TransactionForm({ account, onTransactionAdded, onClose }) {
+  const { accounts } = useContext(AccountsContext);
+  const filteredBankAccounts = accounts.filter(account => account.entity !== 'DMAT');
   const [transactionData, setTransactionData] = useState({
     amount: "",
     transaction_type: "DB",
     notes: "",
     transaction_id: "",
     timestamp: new Date(), // Default to the current date and time
-    source_account: account_url,
+    source_account: account.url,
     destination_account: "", // Will be used only if transaction type is 'CR' or 'TR'
   });
 
@@ -30,9 +34,9 @@ function TransactionForm({ account_url, onTransactionAdded, onClose }) {
     // Adjust source and destination accounts based on transaction type
     if (transactionData.transaction_type === "CR") {
       transactionData.source_account = null;
-      transactionData.destination_account = account_url;
+      transactionData.destination_account = account.url;
     } else if (transactionData.transaction_type === "DB") {
-      transactionData.source_account = account_url;
+      transactionData.source_account = account.url;
       transactionData.destination_account = null;
     }
 
@@ -48,7 +52,7 @@ function TransactionForm({ account_url, onTransactionAdded, onClose }) {
             notes: "",
             transaction_id: "",
             timestamp: new Date(),
-            source_account: account_url,
+            source_account: account.url,
             destination_account: "",
           });
         } else {
@@ -115,15 +119,21 @@ function TransactionForm({ account_url, onTransactionAdded, onClose }) {
 
       {transactionData.transaction_type === "TR" && (
         <Form.Group className="mb-3" controlId="tf-dest-account">
-          <Form.Label>Destination Account URL</Form.Label>
+          <Form.Label>Destination Account</Form.Label>
           <Form.Control
-            type="text"
-            placeholder="Enter destination account URL"
+            as="select"
             name="destination_account"
             value={transactionData.destination_account}
             onChange={handleChange}
             required
-          />
+          >
+            <option value="">Select Destination Account</option>
+            {filteredBankAccounts.map(account => (
+              <option key={account.id} value={account.url}>
+                  {account.name}
+              </option>
+            ))}
+          </Form.Control>
         </Form.Group>
       )}
 

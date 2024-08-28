@@ -21,6 +21,7 @@ class Account(models.Model):
         ("DMAT", "Demat Account"),
         ("CMDT", "Commodity Account"),
         ("CRYP", "Crypto Account"),
+        ("SUB", "Virtual Account"),
         ("LOCK", "Locker"),
     ]
     

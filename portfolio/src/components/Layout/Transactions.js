@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useContext, useEffect } from "react";
 import axios from "axios";
 import { Table } from "react-bootstrap";
+import { AccountsContext } from "../AccountsContext";
 
-const Transactions = ({ account_id, transactions, fetchTransactions }) => {
+const Transactions = ({ account, transactions, fetchTransactions }) => {
+  console.log(account);
+  const { accounts } = useContext(AccountsContext); // Access accounts data
     useEffect(() => {
-      fetchTransactions(account_id);
-    }, [account_id, fetchTransactions]);
+      fetchTransactions(account.id);
+    }, [account, fetchTransactions]);
   
     return (
       <Table responsive striped bordered hover>
@@ -26,7 +29,7 @@ const Transactions = ({ account_id, transactions, fetchTransactions }) => {
               let notes = transaction.notes || "";
   
               if (transaction.transaction_type === "CR" || 
-                  (transaction.transaction_type === "TR" && transaction.destination_account.endsWith(`${account_id}/`))) {
+                  (transaction.transaction_type === "TR" && transaction.destination_account.endsWith(`${account.id}/`))) {
                 credit = transaction.amount;
                 notes += " (from external)";
                 if (transaction.transaction_type === "TR") {
