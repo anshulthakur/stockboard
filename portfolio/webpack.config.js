@@ -8,6 +8,7 @@ module.exports = {
     accounts: './src/accounts.js',
     wallet: './src/wallet.js',
     orders: './src/orderbook.js',
+    portfolios: './src/portfolio.js',
     //webui: '../webui/src/index.js',
   },
   output: {

@@ -20,13 +20,14 @@ class Stock(models.Model):
                              max_length=5)
     face_value = models.DecimalField(max_digits=10, decimal_places = 4)
     sid = models.BigIntegerField(default=None, 
-                                 null=True)
+                                 null=True,
+                                 blank=True)
     market = models.ForeignKey(Market,
                              null=True,
                              to_field='name',
                              on_delete = models.CASCADE)
-    content_type = models.ForeignKey(ContentType, null=True, on_delete=models.SET_NULL)
-    object_id = models.PositiveIntegerField(default=None, null=True)
+    content_type = models.ForeignKey(ContentType, null=True, on_delete=models.SET_NULL, blank=True)
+    object_id = models.PositiveIntegerField(default=None, null=True, blank=True)
     content_object = GenericForeignKey('content_type', 'object_id')
 
     objects = StockManager()

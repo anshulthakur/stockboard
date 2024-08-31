@@ -1,0 +1,28 @@
+/* this is needed to make the content scrollable on larger screens */
+@media (min-width: 576px) {
+    .h-sm-100 {
+        height: 100%;
+    }
+}
+
+.stock-dropdown {
+    border: 1px solid #ccc;
+    max-height: 150px;
+    overflow-y: auto;
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 5px;
+    position: absolute;
+    background-color: white;
+    width: 100%;
+    z-index: 1000;
+  }
+  
+  .stock-dropdown li {
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  
+  .stock-dropdown li:hover {
+    background-color: #f1f1f1;
+  }

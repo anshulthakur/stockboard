@@ -39,6 +39,10 @@
                         <a href="{% url 'portfolio:accounts-page' %}" class="nav-link px-sm-0 px-2">
                             <i class="fs-5 bi-table"></i><span class="ms-1 d-none d-sm-inline">Accounts</span></a>
                     </li>
+                    <li>
+                        <a href="{% url 'portfolio:portfolios-page' %}" class="nav-link px-sm-0 px-2">
+                            <i class="fs-5 bi-table"></i><span class="ms-1 d-none d-sm-inline">Portfolios</span></a>
+                    </li>
                     {% for module in entries %}
                         <li>
                             <a href="#submenu{{ forloop.counter }}" data-bs-toggle="collapse" class="nav-link px-0 align-middle ">

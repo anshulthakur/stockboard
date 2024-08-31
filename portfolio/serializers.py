@@ -64,20 +64,34 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
         return obj.get_net_account_value()
     
 class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
+    invested_value = serializers.SerializerMethodField()
+    current_value = serializers.SerializerMethodField()
+    realized_profit = serializers.SerializerMethodField()
+
     class Meta:
         model = Portfolio
-        fields = ['url', 'id', 'name', 'account']
+        fields = ['url', 'id', 'name', 'account', 'invested_value', 'current_value',
+                  'realized_profit']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:portfolio-detail',},
             'account': {'view_name': 'portfolio:account-detail',},
         }
+
+    def get_invested_value(self, obj):
+        return obj.get_invested_value()
+    
+    def get_current_value(self, obj):
+        return obj.get_portfolio_value()
+
+    def get_realized_profit(self, obj):
+        return obj.get_net_gains()
 
 class BulkTradeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Trade
         fields = ['url', 'id', 'timestamp', 'stock', 'quantity',
                   'price', 'operation', 'portfolio', 'tax',
-                  'brokerage']
+                  'brokerage', 'trade_id']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:trade-detail', 'lookup_field': 'id'},
             'stock': {'view_name': 'portfolio:stock-detail', 'lookup_field': 'id'},
@@ -96,7 +110,7 @@ class TradeSerializer(serializers.HyperlinkedModelSerializer):
         model = Trade
         fields = ['url', 'id', 'timestamp', 'stock', 'quantity',
                   'price', 'operation', 'portfolio', 'tax',
-                  'brokerage']
+                  'brokerage', 'trade_id']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:trade-detail',},
             'portfolio': {'view_name': 'portfolio:portfolio-detail',},

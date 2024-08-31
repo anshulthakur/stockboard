@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.contrib.auth.models import User, Group
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, filters
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
 from rest_framework import status
@@ -34,6 +34,16 @@ def accounts(request):
                        }
     context = {'entries': enabled_modules,
                'module': 'accounts', }
+    return render(request, "portfolio/render.html", context=context)
+
+@login_required
+def portfolios(request):
+    enabled_modules = {'Stocks': {},
+                       'Crypto': {},
+                       'Commodity': {},
+                       }
+    context = {'entries': enabled_modules,
+               'module': 'portfolios', }
     return render(request, "portfolio/render.html", context=context)
 
 @login_required
@@ -82,6 +92,7 @@ class MarketViewSet(viewsets.ModelViewSet):
     queryset = Market.objects.all().order_by('id')
     serializer_class = MarketSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
 
 class StockViewSet(viewsets.ModelViewSet):
     """
@@ -90,6 +101,8 @@ class StockViewSet(viewsets.ModelViewSet):
     queryset = Stock.objects.all().order_by('id')
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    search_fields = ['symbol', 'market__name']  # Supports partial matching on these fields
 
 
 class AccountViewSet(viewsets.ModelViewSet):
@@ -183,20 +196,21 @@ class TradeViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
 
-    filterset_fields = ['timestamp']
+    filterset_fields = ['timestamp', 'portfolio']
 
     def get_queryset(self):
         queryset = self.queryset
         #print(self.request.query_params)
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
-
+        portfolio_filter = self.request.query_params.get('portfolio_id')
         if date_start_filter:
             # Filter tasks by 'date_started'
             queryset = queryset.filter(timestamp__geq=date_start_filter)
         if date_end_filter:
             queryset = queryset.filter(timestamp__leq=date_end_filter)
-
+        if portfolio_filter:
+            queryset = queryset.filter(portfolio__id=portfolio_filter)
         return queryset
     
     def partial_update(self, request, *args, **kwargs):
