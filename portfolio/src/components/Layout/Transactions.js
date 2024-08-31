@@ -16,8 +16,8 @@ const Transactions = ({ account, transactions, fetchTransactions }) => {
           <tr>
             <th>ID</th>
             <th>Time</th>
-            <th>Debit</th>
             <th>Credit</th>
+            <th>Debit</th>
             <th>Info</th>
           </tr>
         </thead>
