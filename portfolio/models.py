@@ -7,6 +7,7 @@ from datetime import datetime
 from django.utils import timezone
 from decimal import Decimal
 from collections import deque
+from django.core.exceptions import ValidationError
 
 class Account(models.Model):
     """
@@ -31,7 +32,8 @@ class Account(models.Model):
     user = models.ForeignKey(User, null=False, blank=False, on_delete=models.CASCADE)
     last_updated = models.DateTimeField(auto_now_add=True)
     currency = models.CharField(blank=False, default='INR', max_length=10)
-    cash_balance = models.DecimalField(max_digits=20, decimal_places=2, default=0, blank=True)  # Tracks cash balance
+    #We don't want cash_balance to be directly settable
+    _cash_balance = models.DecimalField(max_digits=20, decimal_places=2, default=0, blank=True, db_column='cash_balance')  # Tracks cash balance
     parent_account = models.ForeignKey('self', on_delete=models.CASCADE, 
                                        null=True, blank=True,
                                        related_name='sub_accounts')
@@ -48,6 +50,19 @@ class Account(models.Model):
             models.Index(fields=['account_id']),
         ]
     
+    @property
+    def cash_balance(self):
+        return self._cash_balance
+
+    @cash_balance.setter
+    def cash_balance(self, value):
+        self._cash_balance = value
+
+    def __init__(self, *args, **kwargs):
+        if 'cash_balance' in kwargs:
+            kwargs.pop('cash_balance')
+        super().__init__(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name} - {self.entity}"
 
@@ -201,6 +216,14 @@ class Portfolio(models.Model):
 
     def __str__(self):
         return f"{self.name} in {self.account.name}"
+    
+    def save(self, *args, **kwargs):
+        # Ensure that the portfolio is only associated with a brokerage account or an appropriate account type
+        if self.account.entity not in ["BRKR", "DMAT", "CMDT", "CRYP"]:
+            raise ValidationError("Portfolio can only be associated with a Broker, Demat, Commodity, or Crypto account.")
+        
+        # Call the original save method
+        super().save(*args, **kwargs)
 
     def calculate_own_value(self, date=None):
         # Calculate this portfolio's value excluding sub-portfolios
@@ -455,11 +478,17 @@ class Transaction(models.Model):
             return f"{self.get_transaction_type_display()} of {self.amount} to {self.destination_account.name if self.destination_account else 'External'} on {self.timestamp} from {self.source_account.name if self.source_account else 'External'}"
     
     def save(self, *args, **kwargs):
-        if self.transaction_type == "CR" and self.destination_account:
-            self.destination_account.update_cash_balance(self.amount) 
+        # Prevent credit transactions on asset-related accounts
+        asset_related_entities = ["DMAT", "CRYP", "CMDT"]
+        
+        if self.transaction_type == "CR" and self.destination_account and self.destination_account.entity in asset_related_entities:
+            raise ValidationError(f"Cannot perform a credit transaction on a {self.destination_account.get_entity_display()} account.")
 
-        elif self.transaction_type == "DB" and self.source_account:
+        if self.transaction_type == "DB" and self.source_account:
             self.source_account.update_cash_balance(-self.amount)
+        
+        elif self.transaction_type == "CR" and self.destination_account:
+            self.destination_account.update_cash_balance(self.amount)
 
         elif self.transaction_type == "TR":
             if self.source_account:

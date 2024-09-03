@@ -49,7 +49,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
             'user': {'view_name': 'portfolio:user-detail', 'required': False},
             'linked_demat_account': {'view_name': 'portfolio:account-detail',},
             'parent_account': {'view_name': 'portfolio:account-detail',},
-            'cash_balance': {'required': False},  # Marking cash_balance as optional
+            'cash_balance': {'read_only': True},  # Marking cash_balance as read-only
         }
     
     def create(self, validated_data):

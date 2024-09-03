@@ -12,6 +12,8 @@ from rest_framework.test import APIClient, APITestCase
 from rest_framework import status
 from django.http import HttpRequest as Request # Import HttpRequest
 
+from django.core.exceptions import ValidationError
+
 # Create your tests here.
 class BaseTest(APITestCase):
     def setUp(self):
@@ -48,7 +50,7 @@ class BaseTest(APITestCase):
     def create_portfolio(self, name):
         # Create an portfolio
         account = Account.objects.create(id=1, name="Sample Account",
-                                         entity = Account.ENTITIES["BANK"],
+                                         entity = "BANK",
                                          currency = "INR",
                                          user = self.user)
         # Create a portfolio
@@ -76,6 +78,90 @@ class BaseTest(APITestCase):
                              tax = 100.5,
                              brokerage = 200.0)
 
+class TestModelConstraints(BaseTest):
+    
+    def test_portfolio_cannot_be_associated_with_bank_account(self):
+        # Create a bank account
+        bank_account = Account.objects.create(
+            name="Bank Account",
+            entity='BANK',
+            currency="INR",
+            user=self.test_user,
+            account_id = 1234
+        )
+        
+        # Attempt to create a portfolio associated with a bank account
+        with self.assertRaises(ValidationError):
+            Portfolio.objects.create(
+                name="Invalid Portfolio",
+                account=bank_account
+            )
+
+    def test_account_cannot_set_balance_directly(self):
+        # Create a bank account
+        bank_account = Account.objects.create(
+            name="Bank Account",
+            entity='BANK',
+            currency="INR",
+            user=self.test_user,
+            account_id = 1234,
+            cash_balance = 100
+        )
+        self.assertEqual(bank_account.cash_balance, 0)
+    
+    def test_asset_related_accounts_cannot_have_money_in_them(self):
+        # Create a demat account
+        demat_account = Account.objects.create(
+            name="Demat Account",
+            entity='DMAT',
+            currency="INR",
+            user=self.test_user,
+            account_id = 1234
+        )
+
+        # Create a crypto account
+        crypto_account = Account.objects.create(
+            name="Crypto Account",
+            entity='CRYP',
+            currency="INR",
+            user=self.test_user,
+            account_id = 12345
+        )
+
+        # Create a mcx account
+        mcx_account = Account.objects.create(
+            name="Commodity Account",
+            entity='CMDT',
+            currency="INR",
+            user=self.test_user,
+            account_id = 123456
+        )
+
+        # Attempt to create a credit transaction into an asset-related account
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=demat_account,
+                amount=1000,
+                timestamp="2024-08-31T00:00:00Z"
+            )
+        
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=crypto_account,
+                amount=1000,
+                timestamp="2024-08-31T00:00:00Z"
+            )
+
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                transaction_type="CR",
+                destination_account=mcx_account,
+                amount=1000,
+                timestamp="2024-08-31T00:00:00Z"
+            )
+
 class TestNetworth(BaseTest):
     '''
     1. Net Worth Overview
@@ -88,7 +174,20 @@ class TestNetworth(BaseTest):
         1.3. Drilldown by Account Type:
         Validate the net worth distribution among different account types (e.g., bank, demat, broker).
     '''
-    pass
+    def test_fetch_networth_summary(self):
+        """
+        Verify that the sum of all accounts is correctly calculated.
+        """
+        account = Account.objects.create(name="Test Account", user=self.test_user, balance=10000, entity="BANK")
+        portfolio = Portfolio.objects.create(name="Test Portfolio", account=account)
+        stock = Stock.objects.create(symbol="TATASTEEL", face_value=10, market=Market.objects.create(name="NSE"))
+        Trade.objects.create(portfolio=portfolio, stock=stock, quantity=100, price=50, operation="BUY", tax=10, brokerage=5)
+
+        url = reverse('portfolio:networth-summary')  # Assuming this endpoint exists
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_value'], 10000 + (100 * 50))  # Balance + Stock Value
 
 class TestAccountDetails(BaseTest):
     '''
@@ -114,6 +213,24 @@ class TestPortfolioManagement(BaseTest):
         3.4. Portfolio Dividends:
         Verify that dividends are correctly calculated and assigned to the respective portfolios.
     '''
+    def test_filter_trades_by_portfolio(self):
+        """
+        Verify that trades can be filtered by portfolio ID.
+        """
+        account = Account.objects.create(name="Test Account", user=self.test_user, balance=10000, entity="BANK")
+        portfolio1 = Portfolio.objects.create(name="Portfolio 1", account=account)
+        portfolio2 = Portfolio.objects.create(name="Portfolio 2", account=account)
+        stock = Stock.objects.create(symbol="TATASTEEL", face_value=10, market=Market.objects.create(name="NSE"))
+
+        Trade.objects.create(portfolio=portfolio1, stock=stock, quantity=100, price=50, operation="BUY")
+        Trade.objects.create(portfolio=portfolio2, stock=stock, quantity=200, price=60, operation="BUY")
+
+        url = reverse('portfolio:trade-list') + f'?portfolio_id={portfolio1.id}'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['portfolio'], portfolio1.id)
 
 class TestOrderHistory(BaseTest):
     '''
