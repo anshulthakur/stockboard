@@ -386,9 +386,24 @@ class Trade(models.Model):
     def __str__(self):
         return "{} {} shares of {} at {}".format(self.operation, self.quantity, self.stock.symbol, self.price)
 
+    def delete(self, *args, **kwargs):
+        mappings = TradeTransactionMapping.objects.filter(trade=self)
+        for mapping in mappings:
+            mapping.transaction.delete()
+            mapping.delete()
+        super().delete(*args, **kwargs)
+
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)  # Save the trade first
-        
+        is_new_trade = self.pk is None
+        super().save(*args, **kwargs)
+
+        # Handle transactions for the trade
+        if is_new_trade:
+            self.create_transactions()
+        else:
+            self.update_transactions()
+
+    def create_transactions(self):
         broker_account = self.portfolio.account  # Assume the portfolio is linked to a broker account
         demat_account = self.portfolio.account.linked_demat_account
 
@@ -400,52 +415,97 @@ class Trade(models.Model):
         # Create corresponding transactions
         if self.operation == "BUY":
             # Debit from broker account (cash outflow)
-            Transaction.objects.create(
+            debit = Transaction.objects.create(
                 transaction_type="DB",
                 source_account=broker_account,
                 amount=trade_value + self.tax + self.brokerage,
                 timestamp=self.timestamp,
                 notes=f"Purchase of {self.quantity} shares of {self.stock.symbol}"
             )
+            TradeTransactionMapping.objects.create(trade=self, transaction=debit)
 
             # Credit to demat account (stock inflow)
-            Transaction.objects.create(
+            credit = Transaction.objects.create(
                 transaction_type="CR",
+                asset_type="EQUITY",
                 destination_account=demat_account,
                 amount=trade_value,
                 timestamp=self.timestamp,
                 notes=f"Stock credit for {self.quantity} shares of {self.stock.symbol}"
             )
+            TradeTransactionMapping.objects.create(trade=self, transaction=credit)
 
         elif self.operation == "SELL":
             # Credit to broker account (cash inflow)
-            Transaction.objects.create(
+            credit = Transaction.objects.create(
                 transaction_type="CR",
                 destination_account=broker_account,
                 amount=trade_value - self.tax - self.brokerage,
                 timestamp=self.timestamp,
                 notes=f"Sale of {self.quantity} shares of {self.stock.symbol}"
             )
+            TradeTransactionMapping.objects.create(trade=self, transaction=credit)
 
             # Debit from demat account (stock outflow)
-            Transaction.objects.create(
+            debit = Transaction.objects.create(
                 transaction_type="DB",
                 source_account=demat_account,
+                asset_type="EQUITY",
                 amount=trade_value,
                 timestamp=self.timestamp,
                 notes=f"Stock debit for {self.quantity} shares of {self.stock.symbol}"
             )
+            TradeTransactionMapping.objects.create(trade=self, transaction=debit)
         
         elif self.operation == "SEED":
-            #Seeing the account (or gifted stocks)
+            # Seeding the account (or gifted stocks)
             # Credit to demat account (stock inflow)
-            Transaction.objects.create(
+            seed = Transaction.objects.create(
                 transaction_type="CR",
                 destination_account=demat_account,
                 amount=trade_value,
+                asset_type="EQUITY",
                 timestamp=self.timestamp,
                 notes=f"Stock seeded for {self.quantity} shares of {self.stock.symbol}"
             )
+            TradeTransactionMapping.objects.create(trade=self, transaction=seed)
+
+    def update_transactions(self):
+        trade_value = self.quantity * self.price
+
+        # Fetch associated transactions via the mapping
+        mappings = TradeTransactionMapping.objects.filter(trade=self)
+        for mapping in mappings:
+            transaction = mapping.transaction
+
+            # Reverse the old transaction's effect before updating it
+            if self.operation == 'SELL' and transaction.transaction_type == "CR":
+                transaction.destination_account.update_cash_balance(-transaction.amount)
+            elif self.operation == 'BUY' and transaction.transaction_type == "DB":
+                transaction.source_account.update_cash_balance(transaction.amount)
+
+            # Update the transaction details
+            if self.operation == 'BUY':
+                if transaction.transaction_type == "CR":
+                    transaction.amount = trade_value
+                    transaction.notes = f"Stock credit for {self.quantity} shares of {self.stock.symbol}"
+                elif transaction.transaction_type == "DB":
+                    transaction.amount = trade_value + self.tax + self.brokerage
+                    transaction.notes = f"Purchase of {self.quantity} shares of {self.stock.symbol}"
+            elif self.operation == 'SELL':
+                if transaction.transaction_type == "DB":
+                    transaction.amount = trade_value
+                    transaction.notes = f"Stock debit for {self.quantity} shares of {self.stock.symbol}"
+                elif transaction.transaction_type == "CR":
+                    transaction.amount = trade_value - self.tax - self.brokerage
+                    transaction.notes = f"Sale of {self.quantity} shares of {self.stock.symbol}"
+            elif self.operation == "SEED":
+                if transaction.transaction_type == "CR":
+                    transaction.amount = trade_value
+                    transaction.notes = f"Stock seeded for {self.quantity} shares of {self.stock.symbol}"
+
+            transaction.timestamp = self.timestamp  # Always update the timestamp
+            transaction.save()
 
 class Transaction(models.Model):
     """
@@ -456,47 +516,92 @@ class Transaction(models.Model):
         ("DB", "DEBIT"),
         ("TR", "TRANSFER")
     ]
+
+    ASSET_TYPE_CHOICES = [
+        ("CASH", "Cash"),
+        ("EQUITY", "Equity"),
+        ("CRYPTO", "Cryptocurrency"),
+        ("COMMODITY", "Commodity"),
+        # Add more asset types as needed
+    ]
+
     transaction_id = models.CharField(max_length=20, db_index=True, null=True, blank=True)
     transaction_type = models.CharField(choices=TRANSACTION_TYPE_CHOICES, max_length=8, db_index=True)
+    asset_type = models.CharField(choices=ASSET_TYPE_CHOICES, max_length=10, default="CASH", db_index=True)
     source_account = models.ForeignKey(Account, related_name='outgoing_transactions', on_delete=models.CASCADE, null=True, blank=True)
     destination_account = models.ForeignKey(Account, related_name='incoming_transactions', on_delete=models.CASCADE, null=True, blank=True)
     amount = models.DecimalField(max_digits=20, decimal_places=2)
-    timestamp = models.DateTimeField(db_index=True)
+    timestamp = models.DateTimeField(db_index=True, default=timezone.now)
     notes = models.TextField(blank=True, null=True)  # Optional notes or external source
 
     class Meta:
         indexes = [
             models.Index(fields=['transaction_type']),
+            models.Index(fields=['asset_type']),
             models.Index(fields=['timestamp']),
             models.Index(fields=['source_account', 'destination_account']),
         ]
 
     def __str__(self):
         if self.transaction_type == "TR":
-            return f"Transfer of {self.amount} from {self.source_account.name} to {self.destination_account.name} on {self.timestamp}"
+            return f"Transfer of {self.amount} {self.get_asset_type_display()} from {self.source_account.name} to {self.destination_account.name} on {self.timestamp}"
         else:
-            return f"{self.get_transaction_type_display()} of {self.amount} to {self.destination_account.name if self.destination_account else 'External'} on {self.timestamp} from {self.source_account.name if self.source_account else 'External'}"
+            return f"{self.get_transaction_type_display()} of {self.amount} {self.get_asset_type_display()} to {self.destination_account.name if self.destination_account else 'External'} on {self.timestamp} from {self.source_account.name if self.source_account else 'External'}"
     
+    def clean(self):
+        asset_related_entities = {
+            "EQUITY": "DMAT",
+            "CRYPTO": "CRYP",
+            "COMMODITY": "CMDT",
+        }
+
+        # Validate asset type and corresponding account
+        if self.asset_type != "CASH":
+            if self.destination_account and asset_related_entities.get(self.asset_type) != self.destination_account.entity:
+                raise ValidationError(f"Cannot perform a {self.get_asset_type_display()} transaction on a {self.destination_account.get_entity_display()} account.")
+
+            if self.source_account and asset_related_entities.get(self.asset_type) != self.source_account.entity:
+                raise ValidationError(f"Cannot perform a {self.get_asset_type_display()} transaction from a {self.source_account.get_entity_display()} account.")
+        
+        # Prevent credit transactions in asset-related accounts if asset type is CASH
+        if self.asset_type == "CASH" and self.transaction_type in ["CR", "TR"] and self.destination_account and self.destination_account.entity in asset_related_entities.values():
+            raise ValidationError(f"Cannot perform a cash credit transaction on a {self.destination_account.get_entity_display()} account.")
+
+        # Validate that there are sufficient funds/assets for debit/transfer
+        if self.transaction_type in ["DB", "TR"] and self.asset_type == "CASH" and self.source_account and self.source_account.cash_balance < self.amount:
+            raise ValidationError("Cannot withdraw/transfer more money than is present in the account.")
+        
+        # Additional checks for assets (like ensuring sufficient assets are available) could be added here
+
     def save(self, *args, **kwargs):
-        # Prevent credit transactions on asset-related accounts
-        asset_related_entities = ["DMAT", "CRYP", "CMDT"]
+        self.clean()  # Ensure clean is called to validate before saving
         
-        if self.transaction_type == "CR" and self.destination_account and self.destination_account.entity in asset_related_entities:
-            raise ValidationError(f"Cannot perform a credit transaction on a {self.destination_account.get_entity_display()} account.")
-
-        if self.transaction_type == "DB" and self.source_account:
-            self.source_account.update_cash_balance(-self.amount)
-        
-        elif self.transaction_type == "CR" and self.destination_account:
-            self.destination_account.update_cash_balance(self.amount)
-
-        elif self.transaction_type == "TR":
-            if self.source_account:
+        # Handle cash balance updates for cash transactions
+        if self.asset_type == "CASH":
+            if self.transaction_type == "DB" and self.source_account:
                 self.source_account.update_cash_balance(-self.amount)
-            if self.destination_account:
+            
+            elif self.transaction_type == "CR" and self.destination_account:
                 self.destination_account.update_cash_balance(self.amount)
 
+            elif self.transaction_type == "TR":
+                if self.source_account:
+                    self.source_account.update_cash_balance(-self.amount)
+                if self.destination_account:
+                    self.destination_account.update_cash_balance(self.amount)
+
+        # For non-cash transactions, other account or asset-specific logic can be applied here
+
         super().save(*args, **kwargs)
+
+class TradeTransactionMapping(models.Model):
+    trade = models.ForeignKey('Trade', on_delete=models.CASCADE)
+    transaction = models.ForeignKey('Transaction', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('trade', 'transaction')
 
 
 class Dividend(models.Model):

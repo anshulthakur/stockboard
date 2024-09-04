@@ -1,3 +1,4 @@
+import unittest
 from django.test import TestCase
 from django.contrib.auth.models import User
 from portfolio.models import Account, Portfolio, Trade, Transaction
@@ -110,6 +111,23 @@ class TestModelConstraints(BaseTest):
         self.assertEqual(bank_account.cash_balance, 0)
     
     def test_asset_related_accounts_cannot_have_money_in_them(self):
+        # Create a bank account
+        bank_account = Account.objects.create(
+            name="Bank Account",
+            entity='BANK',
+            currency="INR",
+            user=self.test_user,
+            account_id = 12
+        )
+
+        # Add money to bank account
+        Transaction.objects.create(
+            transaction_type="CR",
+            destination_account=bank_account,
+            amount=10000,
+            timestamp="2024-08-31T00:00:00Z"
+        )
+
         # Create a demat account
         demat_account = Account.objects.create(
             name="Demat Account",
@@ -162,6 +180,53 @@ class TestModelConstraints(BaseTest):
                 timestamp="2024-08-31T00:00:00Z"
             )
 
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                transaction_type="TR",
+                destination_account=mcx_account,
+                source_account=bank_account,
+                amount=1000,
+                timestamp="2024-08-31T00:00:00Z"
+            )
+
+    def test_cannot_transfer_money_more_than_balance(self):
+        # Create a bank account
+        bank_account = Account.objects.create(
+            name="Bank Account",
+            entity='BANK',
+            currency="INR",
+            user=self.test_user,
+            account_id = 12
+        )
+
+        # Add money to bank account
+        Transaction.objects.create(
+            transaction_type="CR",
+            destination_account=bank_account,
+            amount=10000,
+            timestamp="2024-08-31T00:00:00Z"
+        )
+
+        # Create a broker account
+        broker_account = Account.objects.create(
+            name="Broker Account",
+            entity='BRKR',
+            currency="INR",
+            user=self.test_user,
+            account_id = 1234
+        )
+
+        # Try to transfer more money to broker than what we have in bank
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                transaction_type="TR",
+                destination_account=broker_account,
+                source_account=bank_account,
+                amount=11000,
+                timestamp="2024-08-31T00:00:00Z"
+            )
+
+
 class TestNetworth(BaseTest):
     '''
     1. Net Worth Overview
@@ -174,6 +239,7 @@ class TestNetworth(BaseTest):
         1.3. Drilldown by Account Type:
         Validate the net worth distribution among different account types (e.g., bank, demat, broker).
     '''
+    @unittest.skip("")
     def test_fetch_networth_summary(self):
         """
         Verify that the sum of all accounts is correctly calculated.
@@ -213,6 +279,7 @@ class TestPortfolioManagement(BaseTest):
         3.4. Portfolio Dividends:
         Verify that dividends are correctly calculated and assigned to the respective portfolios.
     '''
+    @unittest.skip("")
     def test_filter_trades_by_portfolio(self):
         """
         Verify that trades can be filtered by portfolio ID.

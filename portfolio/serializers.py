@@ -121,13 +121,19 @@ class TransactionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Transaction
         fields = ['url', 'id', 'source_account', 'destination_account',
-                  'transaction_type', 'amount',
+                  'transaction_type', 'asset_type', 'amount',
                   'timestamp', 'notes', 'transaction_id']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:transaction-detail',},
             'source_account': {'view_name': 'portfolio:account-detail',},
             'destination_account': {'view_name': 'portfolio:account-detail',},
+            'asset_type': {'required': False},
         }
+    
+    def create(self, validated_data):
+        if 'asset_type' not in validated_data:
+            validated_data['asset_type'] = 'CASH'
+        return super().create(validated_data)
 
 class DividendSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:

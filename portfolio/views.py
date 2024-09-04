@@ -148,13 +148,6 @@ class TransactionViewSet(viewsets.ModelViewSet):
     ordering_fields = '__all__'
     filterset_fields = ['source_account', 'destination_account', 'transaction_type', 'timestamp']
 
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
     def get_queryset(self):
         queryset = self.queryset
         #print(self.request.query_params)
@@ -171,12 +164,12 @@ class TransactionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(timestamp__leq=date_end_filter)
         return queryset
     
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+    # def partial_update(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+    #     serializer = self.get_serializer(instance, data=request.data, partial=True)
+    #     serializer.is_valid(raise_exception=True)
+    #     serializer.save()
+    #     return Response(serializer.data)
 
 class BulkTradeViewSet(viewsets.ModelViewSet):
     queryset = Trade.objects.all()

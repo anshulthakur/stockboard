@@ -320,7 +320,7 @@ class TestTrade(SerializerTests):
                 'stock': stock_url_str,
                 'portfolio': pf_url_str,
                 'quantity': 400,
-                'price': 100,
+                'price': 99,
                 'operation': 'BUY',
                 'tax': 100.5,
                 'brokerage': 50.54}
@@ -334,7 +334,7 @@ class TestTrade(SerializerTests):
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
-                            price= 100,
+                            price= 99,
                             operation= 'BUY',
                             tax= 100.5,
                             brokerage= 50.54)
@@ -356,7 +356,7 @@ class TestTrade(SerializerTests):
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
-                            price= 100,
+                            price= 99,
                             operation= 'BUY',
                             tax= 100.5,
                             brokerage= 50.54)
@@ -372,7 +372,7 @@ class TestTrade(SerializerTests):
                             stock = self.stock,
                             portfolio= self.portfolio,
                             quantity= 400,
-                            price= 100,
+                            price= 99,
                             operation= 'BUY',
                             tax= 100.5,
                             brokerage= 50.54)
