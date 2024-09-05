@@ -226,7 +226,20 @@ class TestModelConstraints(BaseTest):
                 timestamp="2024-08-31T00:00:00Z"
             )
 
+    def test_portfolio_cannot_link_with_cash_account(self):
+        # Create a bank account
+        bank_account = Account.objects.create(
+            name="Bank Account",
+            entity='BANK',
+            currency="INR",
+            user=self.test_user,
+            account_id = 12
+        )
 
+        with self.assertRaises(ValidationError):
+            # Create a portfolio
+            portfolio = Portfolio.objects.create(name="Portfolio 1", 
+                                                account = bank_account)
 class TestNetworth(BaseTest):
     '''
     1. Net Worth Overview

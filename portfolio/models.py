@@ -87,9 +87,10 @@ class Account(models.Model):
 
         # Get this account and its sub-accounts
         accounts = [self] + list(self.sub_accounts.all())
-        # Sum all transactions up to the given date for credits and debits, including transfers
+        # Sum all transactions up to the given date for credits and debits, including transfers (only for cash)
         transactions = Transaction.objects.filter(
-            timestamp__lte=date
+            timestamp__lte=date,
+            asset_type='CASH'
         ).filter(
             Q(source_account__in=accounts) | Q(destination_account__in=accounts)
         ).aggregate(
@@ -102,7 +103,7 @@ class Account(models.Model):
 
         # Calculate the value of all portfolios
         portfolio_values = sum(portfolio.get_portfolio_value(date) for portfolio in self.portfolio_set.all())
-
+        # print(self)
         # print(f"Credits: {transactions['total_credits']}")
         # print(f"Debits: {transactions['total_debits']}")
         # print(f"Net cash: {net_cash}")
@@ -157,6 +158,19 @@ class Account(models.Model):
         
         buy_sell_data['gains'] = buy_sell_data['sell_trades'] - buy_sell_data['buy_trades']
         return buy_sell_data
+    
+    def get_realized_gains(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+        gains = 0
+        for portfolio in self.portfolio_set.all():
+            gains += portfolio.get_realized_gains()
+        #print(f'{self.name}: Gains: {gains}')
+        return gains
 
     def get_net_taxes_and_brokerages(self, date=None):
         """
@@ -296,7 +310,7 @@ class Portfolio(models.Model):
     
     def get_portfolio_value(self, date=None):
         """
-        Calculate the invested value of this portfolio, including any sub-portfolios.
+        Calculate the current value of this portfolio, including any sub-portfolios.
 
         TODO: The results for portfolio on a date must take into account the
         value of scrips on that date.
@@ -325,6 +339,57 @@ class Portfolio(models.Model):
 
         return portfolio
     
+    def get_realized_gains(self, date=None):
+        if date is None:
+            date = timezone.now()
+
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Get all trades up to the given date
+        trades = Trade.objects.filter(
+            portfolio=self,
+            timestamp__lte=date
+        ).order_by('stock', 'timestamp')
+
+        # Dictionary to hold FIFO purchase history for each stock
+        stock_history = {}
+        stock_profits = {}
+        for trade in trades:
+            if trade.stock not in stock_history:
+                stock_history[trade.stock] = deque()
+            if trade.stock not in stock_profits:
+                stock_profits[trade.stock] = 0
+
+            if trade.operation == 'BUY':
+                # Add to purchase history with FIFO
+                stock_history[trade.stock].append((trade.quantity, trade.price))
+            elif trade.operation == 'SELL':
+                # Process sale according to FIFO
+                quantity_to_sell = trade.quantity
+                total_cost = 0
+                while quantity_to_sell > 0 and stock_history[trade.stock]:
+                    purchased_quantity, purchase_price = stock_history[trade.stock].popleft()
+                    if purchased_quantity <= quantity_to_sell:
+                        total_cost += purchased_quantity * purchase_price
+                        stock_profits[trade.stock] += (purchased_quantity * (trade.price - purchase_price))
+                        quantity_to_sell -= purchased_quantity
+                    else:
+                        total_cost += quantity_to_sell * purchase_price
+                        stock_profits[trade.stock] += (quantity_to_sell * (trade.price - purchase_price))
+                        stock_history[trade.stock].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        quantity_to_sell = 0
+
+        # Prepare the total realized profit
+        net_realized_gains = 0
+        for stock, gains in stock_profits.items():
+            net_realized_gains += gains
+        return net_realized_gains
+
+    def get_unrealized_gains(self, date=None):
+        pass
+
     def get_net_gains(self, date=None):
         if date is None:
             date = timezone.now()

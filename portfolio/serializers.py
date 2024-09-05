@@ -169,7 +169,7 @@ class UserFinancialOverviewSerializer(serializers.Serializer):
         
         net_worth = sum(account.get_net_account_value() for account in accounts)
         net_invested_value = sum(account.get_net_invested_value() for account in accounts)
-        net_gains = buy_sell_data['gains']
+        net_gains = sum(account.get_realized_gains() for account in accounts)
         total_buy_value = buy_sell_data['buy_trades']
         total_sell_value = buy_sell_data['sell_trades']
         fiat_liquidity = sum(account.cash_balance for account in accounts if account.entity not in ['DPST'])

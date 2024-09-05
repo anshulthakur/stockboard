@@ -35,39 +35,6 @@ class SerializerTests(APITestCase):
         print(response.data['url'])
         return response.data['url']
 
-
-    def create_portfolio(self, name):
-        # Create an portfolio
-        account = Account.objects.create(id=1, name="Sample Account",
-                                         entity = Account.ENTITIES["BANK"],
-                                         currency = "INR",
-                                         user = self.user)
-        # Create a portfolio
-        portfolio = Portfolio.objects.create(name="Portfolio 1", 
-                                             account = account)
-
-        # Create a market
-        market = Market.objects.create(name="NSE")
-        # Create a stock
-        stock = Stock.objects.create(market=market,
-                                     symbol = "TATASTEEL",
-                                     face_value = 1,)
-
-        # Add money to account
-        Transaction.objects.create(account = account,
-                                   transaction = Transaction.TRANSACTION_TYPE['CR'],
-                                   amount = 50000,
-                                   timestamp = timezone.now())
-        Trade.objects.create(date = timezone.now(),
-                             stock = stock,
-                             quantity = 1000,
-                             price = 45,
-                             operation = Trade.TRADE_TYPES['BUY'],
-                             portfolio = portfolio,
-                             tax = 100.5,
-                             brokerage = 200.0)
-
-
 class TestAccounts(SerializerTests):
     def test_create_account(self):
         url = reverse("portfolio:user-detail",kwargs={'pk': self.test_user.pk})
@@ -463,3 +430,152 @@ class TestDividendAPI(SerializerTests):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Dividend.objects.count(), 0)
+
+class Test_Composite_Url_Apis(SerializerTests):
+    def test_overview_page_query_blank_account(self):
+        summary_url = reverse("portfolio:net-worth")
+        response = self.client.get(summary_url)
+
+        data = response.json()
+        self.assertEqual(data.get('net_worth', -1), Decimal(0))
+        self.assertEqual(data.get('net_gains', -1), Decimal(0))
+        self.assertEqual(data.get('net_invested_value', -1), Decimal(0))
+        self.assertEqual(data.get('total_buy_value', -1), Decimal(0))
+        self.assertEqual(data.get('total_sell_value', -1), Decimal(0))
+        self.assertEqual(data.get('fiat_liquidity', -1), Decimal(0))
+
+    def test_overview_page_query_all_cash(self):
+        # Create an portfolio
+        bank_account = Account.objects.create(account_id=1,
+                                            name='Bank 1',
+                                            entity = 'BANK',
+                                            user = self.test_user,
+                                            currency = 'INR')
+        demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+
+        broker = Account.objects.create(account_id=3,
+                               name='Broker 1',
+                               entity = 'BRKR',
+                               user = self.test_user,
+                               currency = 'INR',
+                               linked_demat_account = demat)
+        # Create a portfolio
+        portfolio = Portfolio.objects.create(name="Portfolio 1", 
+                                             account = broker)
+
+        # Create a market
+        market = Market.objects.create(name="NSE")
+        # Create a stock
+        stock = Stock.objects.create(market=market,
+                                     symbol = "TATASTEEL",
+                                     face_value = 1,)
+
+        # Add money to account
+        Transaction.objects.create(destination_account = bank_account,
+                                   transaction_type = 'CR',
+                                   amount = 50000,
+                                   timestamp = timezone.now())
+        Transaction.objects.create(source_account = bank_account,
+                                   destination_account = broker,
+                                   transaction_type = 'TR',
+                                   amount = 25000,
+                                   timestamp = timezone.now())
+
+        summary_url = reverse("portfolio:net-worth")
+        response = self.client.get(summary_url)
+
+        data = response.json()
+        self.assertEqual(data.get('net_worth', -1), Decimal(50000))
+        self.assertEqual(data.get('net_gains', -1), Decimal(0))
+        self.assertEqual(data.get('net_invested_value', -1), Decimal(0))
+        self.assertEqual(data.get('total_buy_value', -1), Decimal(0))
+        self.assertEqual(data.get('total_sell_value', -1), Decimal(0))
+        self.assertEqual(data.get('fiat_liquidity', -1), Decimal(50000))
+
+    def test_overview_page_query_almost_investment(self):
+        # Create an portfolio
+        bank_account = Account.objects.create(account_id=1,
+                                            name='Bank 1',
+                                            entity = 'BANK',
+                                            user = self.test_user,
+                                            currency = 'INR')
+        demat = Account.objects.create(account_id=2,
+                               name='Demat 1',
+                               entity = 'DMAT',
+                               user = self.test_user,
+                               currency = 'INR')
+
+        broker = Account.objects.create(account_id=3,
+                               name='Broker 1',
+                               entity = 'BRKR',
+                               user = self.test_user,
+                               currency = 'INR',
+                               linked_demat_account = demat)
+        # Create a portfolio
+        portfolio = Portfolio.objects.create(name="Portfolio 1", 
+                                             account = broker)
+
+        # Create a market
+        market = Market.objects.create(name="NSE")
+        # Create a stock
+        stock = Stock.objects.create(market=market,
+                                     symbol = "TATASTEEL",
+                                     face_value = 1,)
+
+        # Add money to account
+        Transaction.objects.create(destination_account = bank_account,
+                                   transaction_type = 'CR',
+                                   amount = 50000,
+                                   timestamp = timezone.now())
+        Transaction.objects.create(source_account = bank_account,
+                                   destination_account = broker,
+                                   transaction_type = 'TR',
+                                   amount = 50000,
+                                   timestamp = timezone.now())
+        
+        Trade.objects.create(timestamp = timezone.now(),
+                             stock = stock,
+                             quantity = 1000,
+                             price = 45,
+                             operation = 'BUY',
+                             portfolio = portfolio,
+                             tax = 100.5,
+                             brokerage = 200.0)
+
+        summary_url = reverse("portfolio:net-worth")
+        response = self.client.get(summary_url)
+
+        data = response.json()
+        #print(data)
+        self.assertEqual(data.get('net_worth', -1), Decimal(50000 - 100.5 - 200.0))
+        self.assertEqual(data.get('net_gains', -1), Decimal(0))
+        self.assertEqual(data.get('net_invested_value', -1), Decimal(45000))
+        self.assertEqual(data.get('total_buy_value', -1), Decimal(45000))
+        self.assertEqual(data.get('total_sell_value', -1), Decimal(0))
+        self.assertEqual(data.get('fiat_liquidity', -1), Decimal(5000 - 100.5 - 200.0))
+
+        #Have some gains
+        Trade.objects.create(timestamp = timezone.now(),
+                             stock = stock,
+                             quantity = 1000,
+                             price = 50,
+                             operation = 'SELL',
+                             portfolio = portfolio,
+                             tax = 100.5,
+                             brokerage = 200.0)
+
+        summary_url = reverse("portfolio:net-worth")
+        response = self.client.get(summary_url)
+
+        data = response.json()
+        #print(data)
+        self.assertEqual(data.get('net_worth', -1), Decimal(55000 - 201 - 400.0))
+        self.assertEqual(data.get('net_gains', -1), Decimal(5000))
+        self.assertEqual(data.get('net_invested_value', -1), Decimal(0))
+        self.assertEqual(data.get('total_buy_value', -1), Decimal(45000))
+        self.assertEqual(data.get('total_sell_value', -1), Decimal(50000))
+        self.assertEqual(data.get('fiat_liquidity', -1), Decimal(55000 - 201 - 400.0))
