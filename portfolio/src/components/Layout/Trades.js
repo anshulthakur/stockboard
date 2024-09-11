@@ -5,11 +5,13 @@ const getRowClass = (type) => {
   return type === "buy" ? "table-success" : "table-warning"; // Green for buy, yellow for sell
 };
 
-const Trades = ({ portfolio, trades, fetchTrades }) => {
-    useEffect(() => {
-      fetchTrades(portfolio.id);
-    }, [portfolio, fetchTrades]);
-  
+const Trades = ({ portfolio, trades}) => {
+    // useEffect(() => {
+    //   console.log('Render trades for portfolio ', portfolio.id);
+    //   console.log(trades);
+    //   fetchTrades(portfolio.id);
+    // }, [portfolio, fetchTrades]);
+
     return (
       <Table responsive striped bordered hover>
         <thead>

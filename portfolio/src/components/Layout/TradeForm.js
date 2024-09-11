@@ -6,19 +6,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { AccountsContext } from '../AccountsContext';
 import { PortfoliosContext } from '../PortfoliosContext';
-
-function useDebounce(callback, delay) {
-  const timeoutRef = React.useRef(null);
-
-  const debounceFn = (...args) => {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      callback(...args);
-    }, delay);
-  };
-
-  return debounceFn;
-}
+import useDebounce from '../../utils/debounce';
 
 function TradeForm({ portfolio, onTradeAdded, onClose }) {
   const { accounts } = useContext(AccountsContext);

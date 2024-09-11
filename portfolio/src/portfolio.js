@@ -4,6 +4,7 @@ import Dashboard from './components/Layout/Dashboard';
 import Trades from "./components/Layout/Trades";
 import TradeForm from "./components/Layout/TradeForm";
 import PortfolioForm from "./components/PortfolioForm";
+import CsvUploader from './components/CsvUploader'; // CSV Uploader component
 import Accordion from 'react-bootstrap/Accordion';
 import Table from 'react-bootstrap/Table';
 import Button from 'react-bootstrap/Button';
@@ -13,6 +14,9 @@ import Nav from 'react-bootstrap/Nav';
 import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 import Modal from 'react-bootstrap/Modal';
+import SearchBar from './components/Layout/SearchBar'; // Search Bar component
+import PaginationComponent from './components/Layout/Pagination'; // Pagination component
+import useDebounce from "./utils/debounce";
 
 import { AccountsContext, AccountsProvider } from "./components/AccountsContext";
 import { PortfoliosContext, PortfoliosProvider } from "./components/PortfoliosContext";
@@ -27,6 +31,7 @@ const getAccountByUrl = (url, accounts) => {
   }
   return null;
 };
+
 const Portfolio = () => {
     const { accounts } = useContext(AccountsContext); // Access accounts data
     const { portfolios, setPortfolios} = useContext(PortfoliosContext);
@@ -35,6 +40,11 @@ const Portfolio = () => {
     const [showPortfolioForm, setShowPortfolioForm] = useState(false);
     const [currentPortfolio, setCurrentPortfolio] = useState(null);
     const [tradesByPortfolio, setTradesByPortfolio] = useState({});
+    const [searchQuery, setSearchQuery] = useState(''); // Search query state
+    const [currentPage, setCurrentPage] = useState(1); // Pagination state
+    const [showCsvModal, setShowCsvModal] = useState(false); // State for CSV modal
+
+    const debouncedSearchQuery = useDebounce(fetchTrades, 1000); //Filter after the user intention
 
     const tradeFormShow = (portfolio) => {
       console.log('tradeFormShow');
@@ -43,23 +53,34 @@ const Portfolio = () => {
     }
     const tradeFormHide = () => setShowTradeForm(false);
 
-    const fetchTrades = (portfolioId) => {
+    const itemsPerPage = 10;
+
+    const fetchTrades = (portfolioId, query = '', page = 1) => {
       console.log('fetchTrades');
-      if (!tradesByPortfolio[portfolioId]) {
-        axios.get(`/portfolio/api/trades/?portfolio_id=${portfolioId}`)
-          .then(response => {
-            if (response.data.count !== 0) {
-              console.log(response.data.results);
-              setTradesByPortfolio(prevState => ({
-                ...prevState,
-                [portfolioId]: response.data.results
-              }));
-            }
-          })
-          .catch(error => {
-            console.error("There was an error fetching the trades!", error);
-          });
-      }
+      const url = `/portfolio/api/trades/?portfolio_id=${portfolioId}&search=${query}&page=${page}`;
+      axios.get(url)
+        .then(response => {
+          if (response.data.count !== 0) {
+            console.log('Fetched trades for portfolio ID ', portfolioId);
+            console.log(response.data.results);
+            setTradesByPortfolio(prevState => ({
+              ...prevState,
+              [portfolioId]: {
+                trades: response.data.results,
+                totalItems: response.data.count
+              }
+            }));
+          }
+        })
+        .catch(error => {
+          console.error("There was an error fetching the trades!", error);
+        });
+    };
+
+    const handleCsvSubmit = (data) => {
+      console.log('CSV data submitted:', data);
+      // Handle bulk creation of trades with submitted data
+      // Make API call here to create trades in bulk
     };
 
     const portfolioFormShow = () => setShowPortfolioForm(true);
@@ -133,17 +154,42 @@ const Portfolio = () => {
                               </Tab>
                               <Tab eventKey={`trades-${index}`} 
                                     title="Trades" 
-                                    onEnter={() => fetchTrades(portfolio.id)}>
+                                    onEnter={() => {
+                                      console.log('onEnter called');
+                                      if (!tradesByPortfolio[portfolio.id]) {
+                                        fetchTrades(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
+                                      }
+                                    }}>
+                                <SearchBar searchQuery={searchQuery} setSearchQuery={(q) => { 
+                                    console.log('SearchBar setquery');
+                                    setSearchQuery(q); 
+                                    debouncedSearchQuery(portfolio.id, q, currentPage);
+                                  }} />
                                 <Trades 
                                   portfolio={portfolio} 
-                                  trades={tradesByPortfolio[portfolio.id] || []} 
-                                  fetchTrades={fetchTrades} 
+                                  trades={tradesByPortfolio[portfolio.id]?.trades || []} 
+                                />
+                                {/* Pagination Component */}
+                                <PaginationComponent 
+                                  itemsPerPage={itemsPerPage} 
+                                  totalItems={tradesByPortfolio[portfolio.id]?.totalItems || 0}
+                                  currentPage={currentPage}
+                                  setCurrentPage={(page) => {
+                                    console.log('setCurrentPage');
+                                    setCurrentPage(page);
+                                    fetchTrades(portfolio.id, searchQuery, page);
+                                  }}
                                 />
                                 <Row className="justify-content-end mt-2">
                                     <Col xs={12} md={3}>
                                         <Button variant="primary" align="end" onClick={() => tradeFormShow(portfolio)}>
                                             Add trades
                                         </Button>{' '}
+                                    </Col>
+                                    <Col xs={12} md={3}>
+                                      <Button variant="secondary" onClick={() => setShowCsvModal(true)}>
+                                        Upload CSV
+                                      </Button>
                                     </Col>
                                 </Row>
                               </Tab>
@@ -153,11 +199,15 @@ const Portfolio = () => {
                 )})
               }
           </Accordion>
+
+          {/* Add Portfolio Modal */}
           <Nav variant="pills">
               <Nav.Item>
                   <Button variant="primary" align="end" onClick={portfolioFormShow}>Add portfolio</Button>{' '}
               </Nav.Item>
           </Nav>
+
+          {/* Trade Form Modal */}
           <Modal show={showTradeForm} onHide={tradeFormHide}>
             <Modal.Header closeButton>
               <Modal.Title>Add trade</Modal.Title>
@@ -173,12 +223,28 @@ const Portfolio = () => {
               <Button variant="secondary" onClick={tradeFormHide}>Close</Button>
             </Modal.Footer>
           </Modal>
+          
+          {/* CSV Upload Modal */}
+          <Modal show={showCsvModal} onHide={() => setShowCsvModal(false)} size="xl">
+            <Modal.Header closeButton>
+              <Modal.Title>Upload CSV</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <CsvUploader onSubmit={handleCsvSubmit} handleClose={() => setShowCsvModal(false)} />
+            </Modal.Body>
+          </Modal>
+
+          {/* Portfolio Form Modal */}
           <Modal show={showPortfolioForm} onHide={portfolioFormHide}>
               <Modal.Header closeButton>
                   <Modal.Title>Add portfolio</Modal.Title>
               </Modal.Header>
               <Modal.Body>
-                  <PortfolioForm onSubmit={handlePortfolioSubmit} onClose={portfolioFormHide} />
+                  <PortfolioForm onSubmit={(newPortfolioData) => {
+                      handlePortfolioSubmit(newPortfolioData);
+                      setShowPortfolioForm(false);
+                    }} 
+                    onClose={portfolioFormHide} />
               </Modal.Body>
           </Modal>
       </div>

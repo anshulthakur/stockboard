@@ -28,3 +28,21 @@ Test Cases:
 Since the transactions may be loaded from external sources, the transaction IDs may be different for each. There should be no duplication of transactions based on transaction IDs. However, the transaction IDs are optional.
 
 * The overview page starts showing summary information.
+
+
+## Uploading bulk transactions
+Format of csv:
+
+```
+Trade ID, DateTime, ISIN, Market, Buy/Sell, Quantity, Price, Brokerage, Tax
+```
+
+The ISIN may not exist in DB (Company). Need API to:
+- get_nse_symbol_for_isin
+- get_bse_symbol_for_isin
+- get_company_info_for_isin
+- create company object
+- create stock object
+
+Any buy implies Debit from broker account, which should have a preceding transfer from linked bank account. When seeding the account, this cannot be known now (and as is the case with ICICI Direct, it would not show up in bank statement either). So, a mock transaction of credit needs to be done at the very beginning to allow the cash flow to stay in balance. One may put an absurdly large amount during the seeding period and then withdraw the remainder once bulk transactions are loaded.
+
