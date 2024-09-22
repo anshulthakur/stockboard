@@ -1,5 +1,6 @@
 loglevel = 'info'
 logger = None
+
 loglevels = ['error', 'warning', 'info', 'debug']
 def set_loglevel(level):
     global loglevel
@@ -39,7 +40,7 @@ class Logger(object):
 
 def getLogger(name=None):
     global logger
-    if logger is not None:
+    if logger is None:
         logger = Logger(name)
         logger.info('Created logger')
     return logger

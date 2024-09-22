@@ -47,7 +47,7 @@ const Portfolio = () => {
     const debouncedSearchQuery = useDebounce(fetchTrades, 1000); //Filter after the user intention
 
     const tradeFormShow = (portfolio) => {
-      console.log('tradeFormShow');
+      console.log('tradeFormShow', portfolio);
       setCurrentPortfolio(portfolio);
       setShowTradeForm(true);
     }
@@ -79,8 +79,8 @@ const Portfolio = () => {
 
     const handleCsvSubmit = (data) => {
       console.log('CSV data submitted:', data);
-      // Handle bulk creation of trades with submitted data
-      // Make API call here to create trades in bulk
+      // Bulk trades have been added, refresh trade data
+      fetchTrades(currentPortfolio.url.split('/').slice(-2, -1)[0]);
     };
 
     const portfolioFormShow = () => setShowPortfolioForm(true);
@@ -110,10 +110,6 @@ const Portfolio = () => {
       console.log('handleTradeAdded');
       fetchTrades(currentPortfolio.url.split('/').slice(-2, -1)[0]);
     };
-
-     const handleOnEnter = () => {
-
-     };
 
     return (
       <div>
@@ -156,6 +152,7 @@ const Portfolio = () => {
                                     title="Trades" 
                                     onEnter={() => {
                                       console.log('onEnter called');
+                                      setCurrentPortfolio(portfolio);
                                       if (!tradesByPortfolio[portfolio.id]) {
                                         fetchTrades(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
                                       }
@@ -230,7 +227,7 @@ const Portfolio = () => {
               <Modal.Title>Upload CSV</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-              <CsvUploader onSubmit={handleCsvSubmit} handleClose={() => setShowCsvModal(false)} />
+              <CsvUploader onSubmit={handleCsvSubmit} handleClose={() => setShowCsvModal(false)} currentPortfolio={currentPortfolio} />
             </Modal.Body>
           </Modal>
 

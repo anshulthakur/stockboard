@@ -7,7 +7,7 @@ const Transactions = ({ account, transactions, fetchTransactions }) => {
   console.log(account);
   const { accounts } = useContext(AccountsContext); // Access accounts data
     useEffect(() => {
-      fetchTransactions(account.id);
+      fetchTransactions(account);
     }, [account, fetchTransactions]);
   
     return (

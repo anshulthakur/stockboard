@@ -174,10 +174,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
 class BulkTradeViewSet(viewsets.ModelViewSet):
     queryset = Trade.objects.all()
     serializer_class = BulkTradeSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
         data = request.data
-        serializer = self.get_serializer(data=data, many=True)
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

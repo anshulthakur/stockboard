@@ -13,6 +13,7 @@ router.register(r'accounts', views.AccountViewSet, basename='account')
 router.register(r'portfolios', views.PortfolioViewSet, basename='portfolio')
 router.register(r'transactions', views.TransactionViewSet, basename='transaction')
 router.register(r'trades', views.TradeViewSet, basename='trade')
+router.register(r'bulk-trades', views.BulkTradeViewSet, basename='bulk-trade')
 router.register(r'dividends', views.DividendViewSet, basename='dividend')
 
 

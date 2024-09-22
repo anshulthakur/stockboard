@@ -28,21 +28,24 @@ const Accounts = () => {
     const [transactionsByAccount, setTransactionsByAccount] = useState({});
 
     const transactionFormShow = (account) => {
-      console.log('transactionFormShow');
+      console.log('transactionFormShow', account);
       setCurrentAccount(account);
       setShowTransactionForm(true);
     }
+    
     const transactionFormHide = () => setShowTransactionForm(false);
 
-    const fetchTransactions = (accountId) => {
-      if (!transactionsByAccount[accountId]) {
-        axios.get(`/portfolio/api/transactions/?account_id=${accountId}`)
+    const fetchTransactions = (account) => {
+
+      console.log('fetchTransactions', account);
+      if (!transactionsByAccount[account.id]) {
+        axios.get(`/portfolio/api/transactions/?account_id=${account.id}`)
           .then(response => {
             if (response.data.count !== 0) {
               console.log(response.data.results);
               setTransactionsByAccount(prevState => ({
                 ...prevState,
-                [accountId]: response.data.results
+                [account.id]: response.data.results
               }));
             }
           })
@@ -50,7 +53,7 @@ const Accounts = () => {
             console.error("There was an error fetching the transactions!", error);
           });
       } //else {
-        //setTransactions(transactionsByAccount[accountId]);
+        //setTransactions(transactionsByAccount[account.id]);
       //}
     };
 
@@ -120,7 +123,7 @@ const Accounts = () => {
                               </Tab>
                               <Tab eventKey={`transactions-${index}`} 
                                     title="Transactions" 
-                                    onEnter={() => fetchTransactions(account.id)}>
+                                    onEnter={() => fetchTransactions(account)}>
                                 <Transactions 
                                   account={account} 
                                   transactions={transactionsByAccount[account.id] || []} 
@@ -150,7 +153,7 @@ const Accounts = () => {
             </Modal.Header>
             <Modal.Body>
               <TransactionForm 
-                account_url={currentAccount} 
+                account={currentAccount} 
                 onTransactionAdded={handleTransactionAdded} 
                 onClose={transactionFormHide} 
               />

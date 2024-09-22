@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from portfolio.models import Account, Portfolio, Trade, Transaction
-from stocks.models import Stock, Market
+from stocks.models import Stock, Market, Company
 import datetime
 from django.utils import timezone
 
@@ -347,6 +347,271 @@ class TestTrade(SerializerTests):
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Trade.objects.count(), 0)
+
+class TestBulkTrade(SerializerTests):
+    def setUp(self):
+        super().setUp()
+
+        # Create accounts
+        self.account_bank = Account.objects.create(
+            account_id=1, name='Bank 1', entity='BANK', user=self.test_user, currency='INR'
+        )
+        self.account_demat = Account.objects.create(
+            account_id=2, name='Demat 1', entity='DMAT', user=self.test_user, currency='INR'
+        )
+        self.account_broker = Account.objects.create(
+            account_id=3, name='Broker 1', entity='BRKR', user=self.test_user, currency='INR',
+            linked_demat_account=self.account_demat
+        )
+        
+        # Create a portfolio
+        self.portfolio = Portfolio.objects.create(name='Portfolio 1', account=self.account_broker)
+
+        # Create a market
+        self.market = Market.objects.create(name="NSE")
+
+        # Create companies and stocks
+        self.company = Company.objects.create(name="Tata Steel Ltd", isin="INE081A01012")
+        self.stock = Stock.objects.create(
+            market=self.market, symbol="TATASTEEL", face_value=1, content_object=self.company
+        )
+
+        # Create some transactions for funding
+        Transaction.objects.create(
+            destination_account=self.account_bank, transaction_type='CR', amount=50000, timestamp=timezone.now()
+        )
+        Transaction.objects.create(
+            source_account=self.account_bank, destination_account=self.account_broker, 
+            transaction_type='TR', amount=40000, timestamp=timezone.now()
+        )
+
+    def test_bulk_trade_creation_with_isin(self):
+        # URLs for related objects
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+        company = Company.objects.create(name="Tata Steel", isin="INE081A01012")
+        
+        # First, we create stock using ISIN and market
+        data = [
+            {
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'isin': 'INE081A01012',  # ISIN provided instead of stock symbol
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 400,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj3303'
+            },
+            {
+                'timestamp': '2024-06-08T20:00:00.000Z',
+                'isin': 'INE081A01012',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 200,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+
+        url = reverse('portfolio:bulk-trade-list')  # Bulk trade endpoint
+        response = self.client.post(url, data, format='json')
+        
+        #print(response.content)
+        # Assertions
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Trade.objects.count(), 2)
+        
+        # Check that each trade has the correct quantity and price
+        trades = Trade.objects.all()
+        self.assertEqual(trades[0].quantity, 400)
+        self.assertEqual(trades[0].price, 99)
+        self.assertEqual(trades[1].quantity, 200)
+        self.assertEqual(trades[1].price, 101)
+
+    def test_bulk_trade_creation_with_partially_incorrect_isin(self):
+        # URLs for related objects
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+        company = Company.objects.create(name="Tata Steel", isin="INE081A01012")
+        
+        # First, we create stock using ISIN and market
+        data = [
+            {
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'isin': 'INE081A01012',  # ISIN provided instead of stock symbol
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 400,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj3303'
+            },
+            {
+                'timestamp': '2024-06-08T20:00:00.000Z',
+                'isin': 'INE081A0101',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 200,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+
+        url = reverse('portfolio:bulk-trade-list')  # Bulk trade endpoint
+        response = self.client.post(url, data, format='json')
+        
+        #print(response.content)
+        # Assertions
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Trade.objects.count(), 0)
+
+    def test_bulk_trade_creation_with_partially_duplicate_values(self):
+        # URLs for related objects
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+        company = Company.objects.create(name="Tata Steel", isin="INE081A01012")
+        
+        # First, we create stock using ISIN and market
+        data = [
+            {
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'isin': 'INE081A01012',  # ISIN provided instead of stock symbol
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 400,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj3303'
+            },
+            {
+                'timestamp': '2024-06-08T20:00:00.000Z',
+                'isin': 'INE081A01012',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 200,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+
+        url = reverse('portfolio:bulk-trade-list')  # Bulk trade endpoint
+        response = self.client.post(url, data, format='json')
+
+        # First, we create stock using ISIN and market
+        data = [
+            {
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'isin': 'INE081A01012',  # ISIN provided instead of stock symbol
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 400,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj330x'
+            },
+            {
+                'timestamp': '2024-06-08T20:00:00.000Z',
+                'isin': 'INE081A01012',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 200,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+        response = self.client.post(url, data, format='json')
+        # Assertions
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Trade.objects.count(), 3)
+        
+        # Check that each trade has the correct quantity and price
+        trades = Trade.objects.all()
+        self.assertEqual(trades[0].quantity, 400)
+        self.assertEqual(trades[0].price, 99)
+        self.assertEqual(trades[1].quantity, 200)
+        self.assertEqual(trades[1].price, 101)
+        self.assertEqual(trades[2].quantity, 400)
+        self.assertEqual(trades[2].price, 99)
+
+    def test_bulk_trade_creation_with_symbol(self):
+        # Reverse URL for portfolio
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+
+        # Test bulk creation using stock symbol
+        url = reverse('portfolio:bulk-trade-list')
+        data = [
+            {
+                'timestamp': '2024-06-08T19:50:00.000Z',
+                'stock_symbol': 'TATASTEEL',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 400,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj3303'
+            },
+            {
+                'timestamp': '2024-06-08T20:00:00.000Z',
+                'isin': 'INE081A01012',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 200,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+
+        response = self.client.post(url, data, format='json')
+        print(response.content)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Trade.objects.count(), 2)
+        trades = Trade.objects.all()
+        self.assertEqual(trades[0].quantity, 400)
+        self.assertEqual(trades[0].price, 99)
+        self.assertEqual(trades[1].quantity, 200)
+        self.assertEqual(trades[1].price, 101)
+
+    def test_bulk_trade_creation_missing_stock(self):
+        # Reverse URL for portfolio
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+
+        # Test bulk creation with neither ISIN nor symbol provided
+        url = reverse('portfolio:bulk-trade-list')
+        data = {
+            'timestamp': '2024-06-08T19:50:00.000Z',
+            'portfolio': pf_url,
+            'quantity': 500,
+            'price': 120,
+            'operation': 'BUY',
+            'tax': 110.5,
+            'brokerage': 60.75
+        }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 class TestDividendAPI(SerializerTests):
     def setUp(self):

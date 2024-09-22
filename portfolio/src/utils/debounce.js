@@ -6,6 +6,8 @@ function useDebounce(callback, delay) {
     const debounceFn = (...args) => {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
+        console.log('debounce');
+        console.log(...args);
         callback(...args);
       }, delay);
     };

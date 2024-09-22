@@ -438,7 +438,7 @@ class Trade(models.Model):
         ("SELL", "SELL"),
         ("SEED", "SEED")
     ]
-    trade_id = models.CharField(max_length=20, db_index=True, null=True, blank=True)
+    trade_id = models.CharField(max_length=100, db_index=True, null=True, blank=True)
     timestamp = models.DateTimeField()
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
     quantity = models.DecimalField(max_digits=20, decimal_places=5)

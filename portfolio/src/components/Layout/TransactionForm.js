@@ -8,6 +8,8 @@ import { AccountsContext
 
  } from '../AccountsContext';
 function TransactionForm({ account, onTransactionAdded, onClose }) {
+  console.log('TransactionForm', account);
+
   const { accounts } = useContext(AccountsContext);
   const filteredBankAccounts = accounts.filter(account => account.entity !== 'DMAT');
   const [transactionData, setTransactionData] = useState({

@@ -86,24 +86,6 @@ class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
     def get_realized_profit(self, obj):
         return obj.get_net_gains()
 
-class BulkTradeSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Trade
-        fields = ['url', 'id', 'timestamp', 'stock', 'quantity',
-                  'price', 'operation', 'portfolio', 'tax',
-                  'brokerage', 'trade_id']
-        extra_kwargs = {
-            'url': {'view_name': 'portfolio:trade-detail', 'lookup_field': 'id'},
-            'stock': {'view_name': 'portfolio:stock-detail', 'lookup_field': 'id'},
-            'portfolio': {'view_name': 'portfolio:portfolio-detail', 'lookup_field': 'id'}
-        }
-
-    def create(self, validated_data):
-        trade_ids = [item['id'] for item in validated_data]
-        existing_trades = Trade.objects.filter(id__in=trade_ids).values_list('id', flat=True)
-        new_trades = [Trade(**item) for item in validated_data if item['id'] not in existing_trades]
-        Trade.objects.bulk_create(new_trades)
-        return new_trades
 
 class TradeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -116,6 +98,89 @@ class TradeSerializer(serializers.HyperlinkedModelSerializer):
             'portfolio': {'view_name': 'portfolio:portfolio-detail',},
             'stock': {'view_name': 'portfolio:stock-detail',},
         }
+
+class BulkTradeUnit(serializers.HyperlinkedModelSerializer):
+    stock_symbol = serializers.CharField(write_only=True, required=False)
+    isin = serializers.CharField(write_only=True, required=False)
+    exchange = serializers.CharField(write_only=True, required=True)
+    name = serializers.CharField(write_only=True, required=False)
+    
+    class Meta:
+        model = Trade
+        fields = ['timestamp', 'quantity', 'price', 
+                  'operation', 'portfolio', 'tax', 'brokerage', 'trade_id', 
+                  'stock_symbol', 'isin', 'exchange', 'name']
+        extra_kwargs = {
+            'portfolio': {'view_name': 'portfolio:portfolio-detail',},
+        }
+
+    def validate(self, data):
+        stock_symbol = data.get('stock_symbol').strip().upper() if 'stock_symbol' in data else None
+        isin = data.get('isin').strip().upper() if 'isin' in data else None
+        name = data.get('name', '').strip().upper() if 'name' in data else None
+
+        market_name = data.get('exchange').upper()
+
+        if not stock_symbol and not isin:
+            raise serializers.ValidationError("Either ISIN or Stock Symbol must be provided.")
+        
+        # Fetch or create the stock based on ISIN or stock symbol
+        market = Market.objects.filter(name=market_name).first()
+        if not market:
+            market = Market.objects.create(name=market_name)
+
+        stock = None
+        if isin:
+            stock = Stock.get_stock_symbol_by_isin(isin, market)
+            data['stock'] = stock
+            if stock == None and stock_symbol is None and name is None:
+                raise serializers.ValidationError(f"Could not find a stock with isin '{isin}'.")
+        if stock == None and stock_symbol:
+            stock = Stock.objects.filter(symbol=stock_symbol, market=market).first()
+            if stock == None and name is None:
+                raise serializers.ValidationError(f"Could not find a stock with symbol '{stock_symbol}'.")
+            data['stock'] = stock
+        if stock == None and name:
+            stock = Stock.get_stock_symbol_by_company_name(name, market)
+            data['stock'] = stock
+            if stock == None:
+                raise serializers.ValidationError(f"Could not find a stock with name '{name}'.")
+        return data
+
+class BulkTradeSerializer(serializers.ListSerializer):
+    child = BulkTradeUnit()
+
+    def create(self, validated_data):
+        trade_ids = []
+        trades_to_create = []
+        duplicates_to_update = []
+
+        for item in validated_data:
+            item.pop('stock_symbol', None)
+            item.pop('isin', None)
+            item.pop('exchange', None)
+            trade_id = item['trade_id']
+            trade_ids.append(trade_id)
+
+            # Check if trade already exists
+            existing_trade = Trade.objects.filter(trade_id=trade_id).first()
+            if existing_trade:
+                # If a trade with the same ID exists, treat it as an update
+                for key, value in item.items():
+                    setattr(existing_trade, key, value)
+                duplicates_to_update.append(existing_trade)
+            else:
+                trades_to_create.append(Trade(**item))
+
+        # Create new trades
+        Trade.objects.bulk_create(trades_to_create)
+
+        # Update existing trades (handling duplicates)
+        for trade in duplicates_to_update:
+            trade.save()
+
+        return trades_to_create + duplicates_to_update
+
         
 class TransactionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:

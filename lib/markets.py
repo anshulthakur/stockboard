@@ -5,10 +5,12 @@ from datetime import datetime, timedelta
 from zipfile import ZipFile
 
 from .misc import get_requests_headers, handle_download
+from stocks.models import Market, Company, Stock
+from lib.logging import getLogger
 
 months = ['', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
-class Market(object):
+class MarketObj(object):
 
     def clean_delivery_data(self, filename):
         pass
@@ -28,11 +30,19 @@ class Market(object):
     def get_scrip_list(self):
         pass
 
-class BSE(Market):
-    def __init__(self):
+    def refresh_companies_data(self, filename):
+        pass
+
+class BSE(MarketObj):
+    def __init__(self, logger=None):
         self.raw_data_dir = './bseData/'
         self.base_url = "https://www.bseindia.com/markets/MarketInfo/BhavCopy.aspx"        
         self.delivery_data_dir = self.raw_data_dir+'delivery/'
+        try:
+            self.market = Market.objects.get(name='BSE')
+        except:
+            self.market = Market.objects.create(name='BSE')
+        self.logger = getLogger()
 
     def clean_delivery_data(self, filename):
         newfile = filename.replace('txt', 'csv').replace('TXT', 'csv')
@@ -115,18 +125,62 @@ class BSE(Market):
                                     'name':row['Issuer Name'].upper().strip(),
                                     'isin': row['ISIN No'].upper().strip(),
                                     'facevalue': row['Face Value'].upper().strip(),
-                                    'security': row['Security Code'].upper().strip()
+                                    'security': row['Security Code'].upper().strip(),
+                                    'active': True if row['Status'].upper().strip()!='Delisted' else False
                                     })
         else:
             print(f'BSE list of scrips does not exist in location. Download from: {url}')
         return members
+    
+    def refresh_companies_data(self, filename):
+        if os.path.exists(filename):
+            with open(filename,'r') as fd:
+                reader = csv.DictReader(fd)
+                for row in reader:
+                    company_info = {'symbol': row['Security Id'].upper().strip(),
+                                    'name':row['Issuer Name'].upper().strip(),
+                                    'isin': row['ISIN No'].upper().strip(),
+                                    'facevalue': row['Face Value'].upper().strip(),
+                                    'security': row['Security Code'].upper().strip(),
+                                    'active': row['Status'].upper().strip()
+                                    }
+                    
+                    if company_info.get('isin') in ['NA', '-']:
+                        self.logger.debug(f'Skipping company {company_info.get("name")} (delisted)')
+                        continue
+                    if company_info.get('active') != 'ACTIVE':
+                        self.logger.debug(f'Skipping company {company_info.get("name")} (not active)')
+                        continue
+                    company = Company.objects.filter(isin=company_info.get('isin'))
+                    if len(company) == 0:
+                        #Create company
+                        self.logger.debug(f'Populate company: {company_info["name"]}')
+                        company = Company.objects.create(name=company_info.get('name'),
+                                                         isin = company_info.get('isin'))
+                    else:
+                        company = company.first()
+                    
+                    stock = Stock.objects.filter(symbol=company_info.get('symbol'), market=self.market)
+                    if len(stock) == 0:
+                        self.logger.debug(f'Populate stock BSE:{company_info["symbol"]}')
+                        stock = Stock.objects.create(symbol = company_info.get('symbol'),
+                                                     face_value= company_info.get('facevalue'),
+                                                     market = self.market,
+                                                     sid = company_info.get('security'),
+                                                     content_object = company,
+                                                     active = True if company_info.get('active')!='Delisted' else False)
+                    
 
-class NSE(Market):
+class NSE(MarketObj):
     def __init__(self):
         self.raw_data_dir = './nseData/'
         self.delivery_data_dir = self.raw_data_dir+'delivery/'
         self.base_url = 'https://www.nseindia.com/all-reports'
-        
+        try:
+            self.market = Market.objects.get(name='NSE')
+        except:
+            self.market = Market.objects.create(name='NSE')
+        self.logger = getLogger()
 
     def clean_delivery_data(self, filename):
         skip = 4
@@ -244,3 +298,31 @@ class NSE(Market):
                                     'facevalue': row[' FACE VALUE'].upper().strip()
                                     })
         return members
+    
+    def refresh_companies_data(self, filename):
+        if os.path.exists(filename):
+            with open(filename,'r') as fd:
+                reader = csv.DictReader(fd)
+                for row in reader:
+                    company_info = {'symbol': row['SYMBOL'].upper().strip(),
+                                'name':row['NAME OF COMPANY'].upper().strip(),
+                                'isin': row[' ISIN NUMBER'].upper().strip(),
+                                'facevalue': row[' FACE VALUE'].upper().strip()
+                                }
+                    company = Company.objects.filter(isin=company_info.get('isin'))
+                    if len(company) == 0:
+                        #Create company
+                        self.logger.debug(f'Populate company: {company_info["name"]}')
+                        company = Company.objects.create(name=company_info.get('name'),
+                                                         isin = company_info.get('isin'))
+                    else:
+                        company = company.first()
+                    
+                    stock = Stock.objects.filter(symbol=company_info.get('symbol'), market=self.market)
+                    if len(stock) == 0:
+                        self.logger.debug(f'Populate stock NSE:{company_info["symbol"]}')
+                        stock = Stock.objects.create(symbol = company_info.get('symbol'),
+                                                     face_value= company_info.get('facevalue'),
+                                                     market = self.market,
+                                                     content_object = company)
+                    
