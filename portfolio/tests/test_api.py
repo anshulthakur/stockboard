@@ -551,6 +551,58 @@ class TestBulkTrade(SerializerTests):
         self.assertEqual(trades[2].quantity, 400)
         self.assertEqual(trades[2].price, 99)
 
+    
+    def test_bulk_trade_creation_with_stock_split(self):
+        # URLs for related objects
+        pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})
+        company = Company.objects.create(name="Tata Steel", isin="INE081A01012")
+        
+        # First, we create stock using ISIN and market
+        data = [
+            {
+                'timestamp': '2019-06-08T19:50:00.000Z',
+                'isin': 'INE081A01012',  # ISIN provided instead of stock symbol
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 100,
+                'price': 99,
+                'operation': 'BUY',
+                'tax': 100.5,
+                'brokerage': 50.54,
+                'trade_id': '123idjdj3303'
+            },
+            {
+                'timestamp': '2020-06-08T20:00:00.000Z',
+                'isin': 'INE081A01012',
+                'exchange': self.market.name,
+                'portfolio': pf_url,
+                'quantity': 50,
+                'price': 101,
+                'operation': 'SELL',
+                'tax': 50.5,
+                'brokerage': 25.54,
+                'trade_id': '123idjdj3387'
+            }
+        ]
+
+        url = reverse('portfolio:bulk-trade-list')  # Bulk trade endpoint
+        response = self.client.post(url, data, format='json')
+        
+        #print(response.content)
+        # Assertions
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Trade.objects.count(), 3)
+        
+        # Check that each trade has the correct quantity and price
+        trades = Trade.objects.all()
+        #print(trades)
+        self.assertEqual(trades[0].quantity, 100)
+        self.assertEqual(trades[0].price, 99)
+        self.assertEqual(trades[1].quantity, 50)
+        self.assertEqual(trades[1].price, 101)
+        self.assertEqual(trades[2].quantity, 450)
+        self.assertEqual(trades[2].price, 0)
+
     def test_bulk_trade_creation_with_symbol(self):
         # Reverse URL for portfolio
         pf_url = reverse("portfolio:portfolio-detail", kwargs={'pk': self.portfolio.id})

@@ -1,8 +1,35 @@
 from django.contrib.auth.models import Group, User
+from django.db.models import Q
 from rest_framework import serializers
 from portfolio.models import Account, Portfolio, Trade, Transaction, Dividend
 from stocks.models import Stock, Market
 from decimal import Decimal
+from datetime import datetime
+from django.utils import timezone
+import json
+
+SPLITS_FILE = '/home/anshul/stockboard/stock_splits.json'
+
+splits_object = None
+
+def get_splits_object():
+    global splits_object
+
+    if splits_object is None:
+        with open(SPLITS_FILE, 'r') as f:
+            splits_object = json.load(f)
+    return splits_object
+
+def get_split_bonus_data(stock):
+        """
+        Fetch the stock split/bonus data from a JSON file (or another source).
+        """
+        split_bonus_data = get_splits_object()
+        # Return all matching entries for the stock
+        return [entry for entry in split_bonus_data if \
+                ((entry['nse'] and entry['nse'].strip().upper() == stock.symbol) \
+                 or (entry['bse'] and entry['bse'].strip().upper() == stock.sid))]
+
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -154,8 +181,10 @@ class BulkTradeSerializer(serializers.ListSerializer):
         trade_ids = []
         trades_to_create = []
         duplicates_to_update = []
+        reconciliation_trades = {}  # Keep track of cumulative adjustments per stock
 
         for item in validated_data:
+            is_duplicate = False 
             item.pop('stock_symbol', None)
             item.pop('isin', None)
             item.pop('exchange', None)
@@ -165,21 +194,138 @@ class BulkTradeSerializer(serializers.ListSerializer):
             # Check if trade already exists
             existing_trade = Trade.objects.filter(trade_id=trade_id).first()
             if existing_trade:
-                # If a trade with the same ID exists, treat it as an update
+                # Update existing trade (duplicates)
                 for key, value in item.items():
                     setattr(existing_trade, key, value)
                 duplicates_to_update.append(existing_trade)
+                is_duplicate = True
             else:
                 trades_to_create.append(Trade(**item))
+            
+            if not is_duplicate: #Handle bonus/splits
+                stock = item.get('stock')  # Assuming 'stock' holds the stock object
+                trade_date = item.get('timestamp').date()
+
+                # Fetch the stock's split/bonus history
+                split_bonus_data = get_split_bonus_data(stock)
+
+                # Process stock split/bonus if trade is before any ex-date
+                for split in split_bonus_data:
+                    #print(split)
+                    ex_date = datetime.strptime(split['ex-date'], '%d %B %Y')
+
+                    if trade_date < ex_date.date():
+                        # Calculate cumulative quantity and zero-cost trades to be reconciled
+                        old_face_value = float(split['old-face-value'])
+                        new_face_value = float(split['new-face-value'])
+                        factor = old_face_value / new_face_value
+                        #print(factor)
+                        # Handle the stock identifier (NSE symbol or BSE ID)
+                        if stock.symbol:
+                            stock_identifier = stock.symbol  # NSE symbol as string
+                        elif stock.sid:
+                            stock_identifier = str(stock.sid)  # BSE ID converted to string for uniformity
+
+                        if stock_identifier not in reconciliation_trades:
+                            reconciliation_trades[stock_identifier] = {
+                                'buy_qty': 0,
+                                'sell_qty': 0,
+                                'portfolio': item.get('portfolio')
+                            }
+
+                        # Add adjustments for buys and sells before ex-date
+                        if item['operation'] == 'BUY':
+                            reconciliation_trades[stock_identifier]['buy_qty'] += int(item['quantity'] * Decimal(factor - 1))
+                        elif item['operation'] == 'SELL':
+                            reconciliation_trades[stock_identifier]['sell_qty'] += int(item['quantity'] * Decimal(factor - 1))
+
+        # Create reconciliation trades for stocks after split/bonus
+        for stock_identifier, reconciliation in reconciliation_trades.items():
+            cumulative_buy = reconciliation['buy_qty'] - reconciliation['sell_qty']
+            #print(reconciliation)
+            if cumulative_buy > 0:
+                # Add zero-cost reconciliation trade
+                try:
+                    stock_obj = Stock.objects.filter(Q(sid=stock_identifier)).first()
+                except:
+                    stock_obj = Stock.objects.filter(Q(symbol=stock_identifier)).first()
+                
+                # Handle BSE ID specifically as an integer match
+                if not stock_obj:
+                    stock_obj = Stock.objects.filter(sid=int(stock_identifier)).first()
+
+                if stock_obj:
+                    reconciliation_trade = Trade(
+                        stock=stock_obj,
+                        timestamp=timezone.make_aware(ex_date),
+                        operation='BUY',
+                        quantity=cumulative_buy,
+                        price=0,  # Zero-cost
+                        trade_id=f"RECON-{stock_identifier}-{ex_date}",
+                        portfolio = reconciliation['portfolio']
+                    )
+                    #print('create', reconciliation_trade)
+                    trades_to_create.append(reconciliation_trade)
 
         # Create new trades
         Trade.objects.bulk_create(trades_to_create)
 
-        # Update existing trades (handling duplicates)
+        # Update existing trades (duplicates)
         for trade in duplicates_to_update:
             trade.save()
 
-        return trades_to_create + duplicates_to_update
+        return trades_to_create + duplicates_to_update #+ reconciliation_trades
+
+
+    def calculate_reconciliation_quantity(self, buy_quantity, sell_quantity, old_face_value, new_face_value):
+        """
+        Calculate the net reconciliation quantity after a stock split or bonus.
+        """
+        net_quantity = buy_quantity - sell_quantity
+        old_face_value = float(old_face_value)
+        new_face_value = float(new_face_value)
+
+        # Calculate the additional shares due to the split or bonus
+        additional_quantity = int(net_quantity * (old_face_value / new_face_value)) - net_quantity
+        return additional_quantity
+
+    def create_reconciliation_trades(self, stock_reconciliations, stock_splits_data):
+        """
+        Create reconciliation trades for each stock based on split/bonus info.
+        """
+        reconciliation_trades = []
+
+        for stock_id, data in stock_reconciliations.items():
+            buy_quantity = data['buy']
+            sell_quantity = data['sell']
+            ex_date = data['ex_date']
+
+            # Get the stock split/bonus info
+            stock_split_info = stock_splits_data[stock_id]
+            old_face_value = stock_split_info['old-face-value']
+            new_face_value = stock_split_info['new-face-value']
+
+            # Calculate the reconciliation quantity (net shares to be credited at zero cost)
+            reconciliation_quantity = self.calculate_reconciliation_quantity(
+                buy_quantity, sell_quantity, old_face_value, new_face_value
+            )
+
+            if reconciliation_quantity > 0:
+                # Create the reconciliation trade (credit additional shares at zero cost)
+                reconciliation_trade = Trade(
+                    trade_id=f"reconciliation_{stock_id}_{ex_date}",
+                    portfolio=None,  # Or assign the correct portfolio
+                    stock_id=stock_id,
+                    quantity=reconciliation_quantity,
+                    price=0,
+                    brokerage=0,
+                    tax=0,
+                    timestamp=ex_date,
+                    operation='BUY'  # Adding shares due to the split/bonus
+                )
+                reconciliation_trades.append(reconciliation_trade)
+
+        return reconciliation_trades
 
         
 class TransactionSerializer(serializers.HyperlinkedModelSerializer):
