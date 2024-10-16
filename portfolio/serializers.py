@@ -188,6 +188,7 @@ class BulkTradeSerializer(serializers.ListSerializer):
             item.pop('stock_symbol', None)
             item.pop('isin', None)
             item.pop('exchange', None)
+            item.pop('name', None)
             trade_id = item['trade_id']
             trade_ids.append(trade_id)
 
