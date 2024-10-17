@@ -38,7 +38,7 @@ const Trades = ({ portfolio, trades}) => {
                   <td>{trade.price}</td>
                   <td>{trade.tax}</td>
                   <td>{trade.brokerage}</td>
-                  <td>{parseFloat(trade.quantity) * parseFloat(trade.price)}</td>
+                  <td>{(parseFloat(trade.quantity) * parseFloat(trade.price)).toFixed(2)}</td>
               </tr>
           ))}
         </tbody>

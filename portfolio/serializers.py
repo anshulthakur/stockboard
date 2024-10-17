@@ -269,7 +269,10 @@ class BulkTradeSerializer(serializers.ListSerializer):
                     trades_to_create.append(reconciliation_trade)
 
         # Create new trades
-        Trade.objects.bulk_create(trades_to_create)
+        #Can't do a bulk_create because we have dependencies to resolve
+        #Trade.objects.bulk_create(trades_to_create)
+        for trade in trades_to_create:
+            trade.save()
 
         # Update existing trades (duplicates)
         for trade in duplicates_to_update:
