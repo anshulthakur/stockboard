@@ -262,26 +262,27 @@ class Portfolio(models.Model):
 
         # Dictionary to hold FIFO purchase history for each stock
         stock_history = {}
-
+        symbol_map = {}
         for trade in trades:
-            if trade.stock not in stock_history:
-                stock_history[trade.stock] = deque()
+            if trade.stock.asset not in stock_history:
+                stock_history[trade.stock.asset] = deque()
+                symbol_map[trade.stock.asset] = trade.stock.symbol
 
             if trade.operation == 'BUY':
                 # Add to purchase history with FIFO
-                stock_history[trade.stock].append((trade.quantity, trade.price))
+                stock_history[trade.stock.asset].append((trade.quantity, trade.price))
             elif trade.operation == 'SELL':
                 # Process sale according to FIFO
                 quantity_to_sell = trade.quantity
                 total_cost = 0
-                while quantity_to_sell > 0 and stock_history[trade.stock]:
-                    purchased_quantity, purchase_price = stock_history[trade.stock].popleft()
+                while quantity_to_sell > 0 and stock_history[trade.stock.asset]:
+                    purchased_quantity, purchase_price = stock_history[trade.stock.asset].popleft()
                     if purchased_quantity <= quantity_to_sell:
                         total_cost += purchased_quantity * purchase_price
                         quantity_to_sell -= purchased_quantity
                     else:
                         total_cost += quantity_to_sell * purchase_price
-                        stock_history[trade.stock].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        stock_history[trade.stock.asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
                         quantity_to_sell = 0
 
         # Prepare the result list
@@ -291,7 +292,7 @@ class Portfolio(models.Model):
             if quantity > 0:
                 total_cost = sum(q * p for q, p in history)
                 average_buy_price = total_cost / quantity
-                result.append((stock, quantity, average_buy_price))
+                result.append((stock, quantity, average_buy_price, symbol_map[stock]))
         return result
 
     def get_invested_value(self, date=None):
@@ -357,28 +358,28 @@ class Portfolio(models.Model):
         stock_history = {}
         stock_profits = {}
         for trade in trades:
-            if trade.stock not in stock_history:
-                stock_history[trade.stock] = deque()
-            if trade.stock not in stock_profits:
-                stock_profits[trade.stock] = 0
+            if trade.stock.asset not in stock_history:
+                stock_history[trade.stock.asset] = deque()
+            if trade.stock.asset not in stock_profits:
+                stock_profits[trade.stock.asset] = 0
 
             if trade.operation == 'BUY':
                 # Add to purchase history with FIFO
-                stock_history[trade.stock].append((trade.quantity, trade.price))
+                stock_history[trade.stock.asset].append((trade.quantity, trade.price))
             elif trade.operation == 'SELL':
                 # Process sale according to FIFO
                 quantity_to_sell = trade.quantity
                 total_cost = 0
-                while quantity_to_sell > 0 and stock_history[trade.stock]:
-                    purchased_quantity, purchase_price = stock_history[trade.stock].popleft()
+                while quantity_to_sell > 0 and stock_history[trade.stock.asset]:
+                    purchased_quantity, purchase_price = stock_history[trade.stock.asset].popleft()
                     if purchased_quantity <= quantity_to_sell:
                         total_cost += purchased_quantity * purchase_price
-                        stock_profits[trade.stock] += (purchased_quantity * (trade.price - purchase_price))
+                        stock_profits[trade.stock.asset] += (purchased_quantity * (trade.price - purchase_price))
                         quantity_to_sell -= purchased_quantity
                     else:
                         total_cost += quantity_to_sell * purchase_price
-                        stock_profits[trade.stock] += (quantity_to_sell * (trade.price - purchase_price))
-                        stock_history[trade.stock].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        stock_profits[trade.stock.asset] += (quantity_to_sell * (trade.price - purchase_price))
+                        stock_history[trade.stock.asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
                         quantity_to_sell = 0
 
         # Prepare the total realized profit

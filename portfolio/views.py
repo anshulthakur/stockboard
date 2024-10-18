@@ -4,6 +4,7 @@ from rest_framework import viewsets, permissions, filters
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from portfolio.serializers import *
 from datetime import timedelta, datetime
@@ -12,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
 from django.contrib.auth.decorators import login_required
+
 
 def temp(request):
     return render(request, "portfolio/lander.html", context={})
@@ -213,6 +215,37 @@ class TradeViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+class CustomPagination(PageNumberPagination):
+    page_size = 150
+    max_page_size = 500
+
+class HoldingsViewSet(viewsets.ViewSet):
+    serializer_class = HoldingSerializer
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    search_fields = ['symbol', 'name']
+    pagination_class = CustomPagination
+    queryset = Portfolio.objects.none()  # Dummy queryset to satisfy permission check
+
+    def list(self, request, portfolio_id):
+        portfolio = Portfolio.objects.get(id=portfolio_id)
+        holdings = portfolio.get_portfolio()
+        
+        members = [{'stock': member[0], 'symbol':member[3], 'shares': member[1], 'price': member[2], 'cost': 0, 'cmp': 0, 'value': 0, 'pnl': 0, 'day_change': 0} for member in holdings]
+        # Apply search filtering
+        search = request.query_params.get('search')
+        if search:
+            if search == 'symbol':
+                members = [member for member in members if search.lower() in member['symbol'].lower()]
+            if search == 'name':
+                members = [member for member in members if search.upper() in member['stock'].upper()]
+
+        # Paginate the list manually
+        paginator = CustomPagination()
+        page = paginator.paginate_queryset(members, request)
+
+        serializer = HoldingSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 class DividendViewSet(viewsets.ModelViewSet):
     queryset = Dividend.objects.all().order_by('id')

@@ -42,6 +42,13 @@ class Stock(models.Model):
             models.Index(fields=["content_type", "object_id"]),
         ]
 
+    @property
+    def asset(self):
+        """
+        Returns the underlying asset (e.g., company, mutual fund) associated with the stock.
+        """
+        return self.content_object
+    
     @classmethod
     def get_stock_symbol_by_isin(cls, isin, market):
         """

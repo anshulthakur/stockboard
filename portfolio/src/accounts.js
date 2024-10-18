@@ -13,6 +13,9 @@ import Nav from 'react-bootstrap/Nav';
 import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 import Modal from 'react-bootstrap/Modal';
+import SearchBar from './components/Layout/SearchBar'; // Search Bar component
+import PaginationComponent from './components/Layout/Pagination'; // Pagination component
+import useDebounce from "./utils/debounce";
 
 import { AccountsContext, AccountsProvider } from "./components/AccountsContext";
 
@@ -24,8 +27,12 @@ const Accounts = () => {
     const [showTransactionForm, setShowTransactionForm] = useState(false);
     const [showAccountForm, setShowAccountForm] = useState(false);
     const [currentAccount, setCurrentAccount] = useState(null);
-    //const [transactions, setTransactions] = useState([]);
     const [transactionsByAccount, setTransactionsByAccount] = useState({});
+    const [searchQuery, setSearchQuery] = useState(''); // Search query state
+    const [currentPage, setCurrentPage] = useState(1); // Pagination state
+    //const [transactions, setTransactions] = useState([]);
+
+    const debouncedSearchQuery = useDebounce(fetchTransactions, 1000); //Filter after the user intention
 
     const transactionFormShow = (account) => {
       console.log('transactionFormShow', account);
@@ -35,26 +42,27 @@ const Accounts = () => {
     
     const transactionFormHide = () => setShowTransactionForm(false);
 
-    const fetchTransactions = (account) => {
+    const itemsPerPage = 10;
 
+    const fetchTransactions = (account, query = '', page = 1) => {
       console.log('fetchTransactions', account);
-      if (!transactionsByAccount[account.id]) {
-        axios.get(`/portfolio/api/transactions/?account_id=${account.id}`)
-          .then(response => {
-            if (response.data.count !== 0) {
-              console.log(response.data.results);
-              setTransactionsByAccount(prevState => ({
-                ...prevState,
-                [account.id]: response.data.results
-              }));
-            }
-          })
-          .catch(error => {
-            console.error("There was an error fetching the transactions!", error);
-          });
-      } //else {
-        //setTransactions(transactionsByAccount[account.id]);
-      //}
+      const url = `/portfolio/api/transactions/?account_id=${account.id}&search=${query}&page=${page}`;
+      axios.get(url)
+        .then(response => {
+          if (response.data.count !== 0) {
+            console.log(response.data.results);
+            setTransactionsByAccount(prevState => ({
+              ...prevState,
+              [account.id]: {
+                transactions: response.data.results,
+                totalItems: response.data.count
+              }
+            }));
+          }
+        })
+        .catch(error => {
+          console.error("There was an error fetching the transactions!", error);
+        });
     };
 
     const accountFormShow = () => setShowAccountForm(true);
@@ -123,11 +131,32 @@ const Accounts = () => {
                               </Tab>
                               <Tab eventKey={`transactions-${index}`} 
                                     title="Transactions" 
-                                    onEnter={() => fetchTransactions(account)}>
+                                    onEnter={() => {
+                                      console.log('onEnter called');
+                                      setCurrentAccount(account);
+                                      if (!transactionsByAccount[account.id]) {
+                                        fetchTransactions(account, searchQuery, currentPage); // Only fetch if not already fetched
+                                      }
+                                    }}>
+                                <SearchBar searchQuery={searchQuery} setSearchQuery={(q) => { 
+                                    console.log('SearchBar setquery');
+                                    setSearchQuery(q); 
+                                    debouncedSearchQuery(account.id, q, currentPage);
+                                  }} />
                                 <Transactions 
                                   account={account} 
-                                  transactions={transactionsByAccount[account.id] || []} 
-                                  fetchTransactions={fetchTransactions} 
+                                  transactions={transactionsByAccount[account.id]?.transactions || []}
+                                />
+                                {/* Pagination Component */}
+                                <PaginationComponent 
+                                  itemsPerPage={itemsPerPage} 
+                                  totalItems={transactionsByAccount[account.id]?.totalItems || 0}
+                                  currentPage={currentPage}
+                                  setCurrentPage={(page) => {
+                                    console.log('setCurrentPage');
+                                    setCurrentPage(page);
+                                    fetchTransactions(account, searchQuery, page);
+                                  }}
                                 />
                                 <Row className="justify-content-end mt-2">
                                     <Col xs={12} md={3}>

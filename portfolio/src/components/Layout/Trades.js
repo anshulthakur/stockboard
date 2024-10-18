@@ -18,7 +18,8 @@ const Trades = ({ portfolio, trades}) => {
           <tr>
               <th>Trade ID</th>
               <th>Date</th>
-              <th>Ticker</th>
+              <th>Symbol</th>
+              <th>Exchange</th>
               <th>Operation</th>
               <th>Quantity</th>
               <th>Price</th>
@@ -32,7 +33,8 @@ const Trades = ({ portfolio, trades}) => {
               <tr key={index} className={getRowClass(trade.operation)}>
                   <td>{trade.id}</td>
                   <td>{new Date(trade.timestamp).toLocaleString()}</td>
-                  <td><a href="{trade.stock}">SYMBOL</a></td>
+                  <td><a href={trade.stock}>{trade.symbol}</a></td>
+                  <td>{trade.market}</td>
                   <td>{trade.operation}</td>
                   <td>{trade.quantity}</td>
                   <td>{trade.price}</td>

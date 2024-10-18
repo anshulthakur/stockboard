@@ -14,6 +14,8 @@ import Nav from 'react-bootstrap/Nav';
 import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 import Modal from 'react-bootstrap/Modal';
+import DashboardCard from "./components/DashboardCard";
+import Holdings from './components/Holdings';
 import SearchBar from './components/Layout/SearchBar'; // Search Bar component
 import PaginationComponent from './components/Layout/Pagination'; // Pagination component
 import useDebounce from "./utils/debounce";
@@ -21,6 +23,13 @@ import useDebounce from "./utils/debounce";
 import { AccountsContext, AccountsProvider } from "./components/AccountsContext";
 import { PortfoliosContext, PortfoliosProvider } from "./components/PortfoliosContext";
 import axios from "axios";
+
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import '@fortawesome/fontawesome-svg-core/styles.css';
+
+import { faChartLine, faChartPie, faMoneyBillWave, faWallet } from '@fortawesome/free-solid-svg-icons';
+
+
 axios.defaults.headers.common['X-CSRFToken'] = csrftoken;
 
 const getAccountByUrl = (url, accounts) => {
@@ -40,6 +49,7 @@ const Portfolio = () => {
     const [showPortfolioForm, setShowPortfolioForm] = useState(false);
     const [currentPortfolio, setCurrentPortfolio] = useState(null);
     const [tradesByPortfolio, setTradesByPortfolio] = useState({});
+    const [holdingsByPortfolio, setHoldingsByPortfolio] = useState({});
     const [searchQuery, setSearchQuery] = useState(''); // Search query state
     const [currentPage, setCurrentPage] = useState(1); // Pagination state
     const [showCsvModal, setShowCsvModal] = useState(false); // State for CSV modal
@@ -53,7 +63,7 @@ const Portfolio = () => {
     }
     const tradeFormHide = () => setShowTradeForm(false);
 
-    const itemsPerPage = 10;
+    const itemsPerPage = 15;
 
     const fetchTrades = (portfolioId, query = '', page = 1) => {
       console.log('fetchTrades');
@@ -74,6 +84,28 @@ const Portfolio = () => {
         })
         .catch(error => {
           console.error("There was an error fetching the trades!", error);
+        });
+    };
+
+    const fetchHoldings = (portfolioId, query = '', page = 1) => {
+      console.log('fetchTrades');
+      const url = `/portfolio/api/holdings/${portfolioId}/?search=${query}&page=${page}`;
+      axios.get(url)
+        .then(response => {
+          if (response.data.count !== 0) {
+            console.log('Fetched holdings for portfolio ID ', portfolioId);
+            console.log(response.data.results);
+            setHoldingsByPortfolio(prevState => ({
+              ...prevState,
+              [portfolioId]: {
+                holdings: response.data.results,
+                totalItems: response.data.count
+              }
+            }));
+          }
+        })
+        .catch(error => {
+          console.error("There was an error fetching the holdings!", error);
         });
     };
 
@@ -147,12 +179,76 @@ const Portfolio = () => {
                                           </tr>
                                       </tbody>
                                   </Table>
+                                  <Row>
+                                    <Col md={4} className="mb-3">
+                                    <DashboardCard title="Cost" 
+                                                  value={portfolio.current_value} 
+                                                  subtitle={`Current invest: ${portfolio.invested_value}`} 
+                                                  icon={<FontAwesomeIcon icon={faWallet} size="2x" />}
+                                                  />
+                                    </Col>
+                                    <Col md={4} className="mb-3">
+                                    <DashboardCard title="Wallet Value" 
+                                                  value={portfolio.current_value} 
+                                                  subtitle={`Previous day: ${portfolio.current_value}`} 
+                                                  icon={<FontAwesomeIcon icon={faMoneyBillWave} size="2x" />}
+                                                  />
+                                    </Col>
+                                    <Col md={4} className="mb-3">
+                                    <DashboardCard title="Current W/L" 
+                                                  value={portfolio.current_value} 
+                                                  subtitle="-80.21%" 
+                                                  icon={<FontAwesomeIcon icon={faChartLine} size="2x" />} 
+                                                  />
+                                    </Col>
+                                    <Col md={4} className="mb-3">
+                                    <DashboardCard title="Materialized W/L" 
+                                                    value={parseFloat(portfolio.realized_profit.sell_trades)-parseFloat(portfolio.realized_profit.buy_trades)} 
+                                                    subtitle="" 
+                                                    icon={<FontAwesomeIcon icon={faChartPie} size="2x" />} 
+                                                    />
+                                    </Col>
+                                  </Row>
+                                  {/* <Row>
+                                    <Distribution type={type} data={data} />
+                                  </Row> */}
+                              </Tab>
+                              <Tab eventKey={`portfolio-${index}`} 
+                                    title="Holdings"
+                                    onEnter={() => {
+                                      console.log('onEnter called');
+                                      setCurrentPortfolio(portfolio);
+                                      setSearchQuery('');
+                                      if (!holdingsByPortfolio[portfolio.id]) {
+                                        fetchHoldings(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
+                                      }
+                                    }}>
+                                  <SearchBar searchQuery={searchQuery} setSearchQuery={(q) => { 
+                                    console.log('SearchBar setquery');
+                                    setSearchQuery(q); 
+                                    debouncedSearchQuery(portfolio.id, q, currentPage);
+                                  }} />
+                                  <Holdings portfolio={portfolio} 
+                                            holdings={holdingsByPortfolio[portfolio.id]?.holdings || []} 
+                                   />
+                                  {/* Pagination Component */}
+                                  <PaginationComponent 
+                                    itemsPerPage={200} 
+                                    totalItems={tradesByPortfolio[portfolio.id]?.totalItems || 0}
+                                    currentPage={currentPage}
+                                    setCurrentPage={(page) => {
+                                      console.log('setCurrentPage');
+                                      setCurrentPage(page);
+                                      fetchTrades(portfolio.id, searchQuery, page);
+                                    }}
+                                  />
                               </Tab>
                               <Tab eventKey={`trades-${index}`} 
                                     title="Trades" 
                                     onEnter={() => {
                                       console.log('onEnter called');
                                       setCurrentPortfolio(portfolio);
+                                      setSearchQuery('');
                                       if (!tradesByPortfolio[portfolio.id]) {
                                         fetchTrades(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
                                       }

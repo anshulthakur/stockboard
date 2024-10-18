@@ -114,17 +114,50 @@ class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
         return obj.get_net_gains()
 
 
+class HoldingSerializer(serializers.Serializer):
+    stock = serializers.CharField(read_only=True, required=False)
+    symbol = serializers.CharField(read_only=True, required=False)
+    shares = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                      read_only=True, required=False)
+    price = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                     read_only=True, required=False)
+    cost = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                    read_only=True, required=False)
+    cmp = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                   read_only=True, required=False)
+    value = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                     read_only=True, required=False)
+    pnl = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                   read_only=True, required=False)
+    day_change = serializers.DecimalField(max_digits=20, decimal_places=2,
+                                          read_only=True, required=False)
+
+    class Meta:
+        model = None
+
+
 class TradeSerializer(serializers.HyperlinkedModelSerializer):
+    symbol = serializers.CharField(read_only=True, required=False)
+    market = serializers.CharField(read_only=True, required=False)
+
     class Meta:
         model = Trade
         fields = ['url', 'id', 'timestamp', 'stock', 'quantity',
                   'price', 'operation', 'portfolio', 'tax',
-                  'brokerage', 'trade_id']
+                  'brokerage', 'trade_id', 'symbol', 'market']
         extra_kwargs = {
             'url': {'view_name': 'portfolio:trade-detail',},
             'portfolio': {'view_name': 'portfolio:portfolio-detail',},
             'stock': {'view_name': 'portfolio:stock-detail',},
+            'symbol': {'required': False,},
+            'market': {'required': False,},
         }
+    
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)  # Call the parent method
+        representation['symbol'] = instance.stock.symbol
+        representation['market'] = instance.stock.market.name if instance.stock.market else ''
+        return representation  # Return the modified representation
 
 class BulkTradeUnit(serializers.HyperlinkedModelSerializer):
     stock_symbol = serializers.CharField(write_only=True, required=False)

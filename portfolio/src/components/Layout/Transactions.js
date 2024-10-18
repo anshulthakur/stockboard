@@ -3,12 +3,11 @@ import axios from "axios";
 import { Table } from "react-bootstrap";
 import { AccountsContext } from "../AccountsContext";
 
-const Transactions = ({ account, transactions, fetchTransactions }) => {
-  console.log(account);
-  const { accounts } = useContext(AccountsContext); // Access accounts data
-    useEffect(() => {
-      fetchTransactions(account);
-    }, [account, fetchTransactions]);
+const Transactions = ({ account, transactions }) => {
+  // const { accounts } = useContext(AccountsContext); // Access accounts data
+  //   useEffect(() => {
+  //     fetchTransactions(account);
+  //   }, [account, fetchTransactions]);
   
     return (
       <Table responsive striped bordered hover>

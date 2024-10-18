@@ -15,7 +15,7 @@ router.register(r'transactions', views.TransactionViewSet, basename='transaction
 router.register(r'trades', views.TradeViewSet, basename='trade')
 router.register(r'bulk-trades', views.BulkTradeViewSet, basename='bulk-trade')
 router.register(r'dividends', views.DividendViewSet, basename='dividend')
-
+router.register(r'holdings/(?P<portfolio_id>\d+)', views.HoldingsViewSet, basename='holdings')
 
 app_name="portfolio"
 
