@@ -106,7 +106,16 @@ class StockViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['symbol', 'market__name']  # Supports partial matching on these fields
 
-
+    def get_queryset(self):
+        queryset = self.queryset
+        #print(self.request.query_params)
+        symbol = self.request.query_params.get('symbol')
+        market = self.request.query_params.get('market')
+        
+        if symbol:
+            queryset = queryset.filter(symbol__contains=symbol)
+        return queryset
+    
 class AccountViewSet(viewsets.ModelViewSet):
     queryset = Account.objects.all().order_by('id')
     serializer_class = AccountSerializer
@@ -143,7 +152,7 @@ class PortfolioViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 class TransactionViewSet(viewsets.ModelViewSet):
-    queryset = Transaction.objects.all().order_by('id')
+    queryset = Transaction.objects.all().order_by('timestamp')
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -174,7 +183,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     #     return Response(serializer.data)
 
 class BulkTradeViewSet(viewsets.ModelViewSet):
-    queryset = Trade.objects.all()
+    queryset = Trade.objects.all().order_by('timestamp')
     serializer_class = BulkTradeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -186,20 +195,22 @@ class BulkTradeViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class TradeViewSet(viewsets.ModelViewSet):
-    queryset = Trade.objects.all().order_by('id')
+    queryset = Trade.objects.all().order_by('timestamp')
     serializer_class = TradeSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     ordering_fields = '__all__'
 
-    filterset_fields = ['timestamp', 'portfolio']
+    filterset_fields = ['timestamp', 'portfolio', 'stock']
 
     def get_queryset(self):
         queryset = self.queryset
+        #queryset = super().get_queryset()
         #print(self.request.query_params)
         date_start_filter = self.request.query_params.get('date_start')
         date_end_filter = self.request.query_params.get('date_end')
         portfolio_filter = self.request.query_params.get('portfolio_id')
+        symbol = self.request.query_params.get('search')
         if date_start_filter:
             # Filter tasks by 'date_started'
             queryset = queryset.filter(timestamp__geq=date_start_filter)
@@ -207,6 +218,9 @@ class TradeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(timestamp__leq=date_end_filter)
         if portfolio_filter:
             queryset = queryset.filter(portfolio__id=portfolio_filter)
+        if symbol:
+            queryset = queryset.filter(stock__symbol__icontains=symbol)
+        print(queryset)
         return queryset
     
     def partial_update(self, request, *args, **kwargs):
@@ -226,19 +240,21 @@ class HoldingsViewSet(viewsets.ViewSet):
     search_fields = ['symbol', 'name']
     pagination_class = CustomPagination
     queryset = Portfolio.objects.none()  # Dummy queryset to satisfy permission check
+    filterset_fields = ['timestamp', 'portfolio', 'symbol']
 
     def list(self, request, portfolio_id):
         portfolio = Portfolio.objects.get(id=portfolio_id)
         holdings = portfolio.get_portfolio()
         
         members = [{'stock': member[0], 'symbol':member[3], 'shares': member[1], 'price': member[2], 'cost': 0, 'cmp': 0, 'value': 0, 'pnl': 0, 'day_change': 0} for member in holdings]
+        members = sorted(members, key=lambda x: x['symbol'])
         # Apply search filtering
-        search = request.query_params.get('search')
-        if search:
-            if search == 'symbol':
-                members = [member for member in members if search.lower() in member['symbol'].lower()]
-            if search == 'name':
-                members = [member for member in members if search.upper() in member['stock'].upper()]
+        symbol = request.query_params.get('symbol', None)
+        stock = request.query_params.get('stock', None)
+        if symbol is not None:
+            members = [member for member in members if symbol.lower() in member['symbol'].lower()]
+        if stock is not None:
+            members = [member for member in members if stock.upper() in member['stock'].upper()]
 
         # Paginate the list manually
         paginator = CustomPagination()
@@ -248,7 +264,7 @@ class HoldingsViewSet(viewsets.ViewSet):
         return paginator.get_paginated_response(serializer.data)
 
 class DividendViewSet(viewsets.ModelViewSet):
-    queryset = Dividend.objects.all().order_by('id')
+    queryset = Dividend.objects.all().order_by('record_date')
     serializer_class = DividendSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]

@@ -51,10 +51,9 @@ const Portfolio = () => {
     const [tradesByPortfolio, setTradesByPortfolio] = useState({});
     const [holdingsByPortfolio, setHoldingsByPortfolio] = useState({});
     const [searchQuery, setSearchQuery] = useState(''); // Search query state
+    const [holdingQuery, setHoldingQuery] = useState(''); // Search query state
     const [currentPage, setCurrentPage] = useState(1); // Pagination state
     const [showCsvModal, setShowCsvModal] = useState(false); // State for CSV modal
-
-    const debouncedSearchQuery = useDebounce(fetchTrades, 1000); //Filter after the user intention
 
     const tradeFormShow = (portfolio) => {
       console.log('tradeFormShow', portfolio);
@@ -87,9 +86,11 @@ const Portfolio = () => {
         });
     };
 
+    const debouncedSearchQuery = useDebounce(fetchTrades, 1000); //Filter after the user intention
+
     const fetchHoldings = (portfolioId, query = '', page = 1) => {
       console.log('fetchTrades');
-      const url = `/portfolio/api/holdings/${portfolioId}/?search=${query}&page=${page}`;
+      const url = `/portfolio/api/holdings/${portfolioId}/?symbol=${query}&page=${page}`;
       axios.get(url)
         .then(response => {
           if (response.data.count !== 0) {
@@ -108,6 +109,8 @@ const Portfolio = () => {
           console.error("There was an error fetching the holdings!", error);
         });
     };
+
+    const debouncedHoldingQuery = useDebounce(fetchHoldings, 1000); //Filter after the user intention
 
     const handleCsvSubmit = (data) => {
       console.log('CSV data submitted:', data);
@@ -175,7 +178,7 @@ const Portfolio = () => {
                                               <td>{account.name}</td>
                                               <td>{portfolio.invested_value}</td>
                                               <td>{portfolio.current_value}</td>
-                                              <td>{parseFloat(portfolio.realized_profit.sell_trades)-parseFloat(portfolio.realized_profit.buy_trades)}</td>
+                                              <td>{parseFloat(portfolio.realized_profit)}</td>
                                           </tr>
                                       </tbody>
                                   </Table>
@@ -203,7 +206,7 @@ const Portfolio = () => {
                                     </Col>
                                     <Col md={4} className="mb-3">
                                     <DashboardCard title="Materialized W/L" 
-                                                    value={parseFloat(portfolio.realized_profit.sell_trades)-parseFloat(portfolio.realized_profit.buy_trades)} 
+                                                    value={parseFloat(portfolio.realized_profit)} 
                                                     subtitle="" 
                                                     icon={<FontAwesomeIcon icon={faChartPie} size="2x" />} 
                                                     />
@@ -218,15 +221,14 @@ const Portfolio = () => {
                                     onEnter={() => {
                                       console.log('onEnter called');
                                       setCurrentPortfolio(portfolio);
-                                      setSearchQuery('');
                                       if (!holdingsByPortfolio[portfolio.id]) {
                                         fetchHoldings(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
                                       }
                                     }}>
-                                  <SearchBar searchQuery={searchQuery} setSearchQuery={(q) => { 
-                                    console.log('SearchBar setquery');
-                                    setSearchQuery(q); 
-                                    debouncedSearchQuery(portfolio.id, q, currentPage);
+                                  <SearchBar searchQuery={holdingQuery} setSearchQuery={(q) => { 
+                                    console.log('SearchBar setholdingquery');
+                                    setHoldingQuery(q); 
+                                    debouncedHoldingQuery(portfolio.id, q, currentPage);
                                   }} />
                                   <Holdings portfolio={portfolio} 
                                             holdings={holdingsByPortfolio[portfolio.id]?.holdings || []} 
@@ -248,7 +250,6 @@ const Portfolio = () => {
                                     onEnter={() => {
                                       console.log('onEnter called');
                                       setCurrentPortfolio(portfolio);
-                                      setSearchQuery('');
                                       if (!tradesByPortfolio[portfolio.id]) {
                                         fetchTrades(portfolio.id, searchQuery, currentPage); // Only fetch if not already fetched
                                       }

@@ -258,41 +258,54 @@ class Portfolio(models.Model):
         trades = Trade.objects.filter(
             portfolio=self,
             timestamp__lte=date
-        ).order_by('stock', 'timestamp')
+        ).order_by('timestamp', 'stock')
 
         # Dictionary to hold FIFO purchase history for each stock
         stock_history = {}
         symbol_map = {}
         for trade in trades:
-            if trade.stock.asset not in stock_history:
-                stock_history[trade.stock.asset] = deque()
-                symbol_map[trade.stock.asset] = trade.stock.symbol
+            asset = str(trade.stock.asset).strip()
+            if asset not in stock_history:
+                #print(f'Add {asset} to history')
+                stock_history[asset] = deque()
+                symbol_map[asset] = {'object': trade.stock.asset,
+                                    'symbol': trade.stock.symbol}
 
             if trade.operation == 'BUY':
                 # Add to purchase history with FIFO
-                stock_history[trade.stock.asset].append((trade.quantity, trade.price))
+                stock_history[asset].append((trade.quantity, trade.price))
+                #print(f'Buy {trade.quantity} of {asset}')
             elif trade.operation == 'SELL':
                 # Process sale according to FIFO
+                #print(f'Sell {trade.quantity} of {asset}')
                 quantity_to_sell = trade.quantity
                 total_cost = 0
-                while quantity_to_sell > 0 and stock_history[trade.stock.asset]:
-                    purchased_quantity, purchase_price = stock_history[trade.stock.asset].popleft()
+                if not stock_history[asset]:
+                    print(f"History absent for {asset}")
+                while quantity_to_sell > 0 and stock_history[asset]:
+                    purchased_quantity, purchase_price = stock_history[asset].popleft()
                     if purchased_quantity <= quantity_to_sell:
                         total_cost += purchased_quantity * purchase_price
                         quantity_to_sell -= purchased_quantity
+                        #print(f"{asset} completely sold from portfolio")
                     else:
                         total_cost += quantity_to_sell * purchase_price
-                        stock_history[trade.stock.asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        stock_history[asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
                         quantity_to_sell = 0
+                        #print(f"{purchased_quantity - quantity_to_sell} remain for {asset}")
 
         # Prepare the result list
         result = []
         for stock, history in stock_history.items():
             quantity = sum(q for q, _ in history)
+            # print(f'Stock {stock}: {quantity}')
+            # for q, _ in history:
+            #     print(f"\t{q}")
+            
             if quantity > 0:
                 total_cost = sum(q * p for q, p in history)
                 average_buy_price = total_cost / quantity
-                result.append((stock, quantity, average_buy_price, symbol_map[stock]))
+                result.append((symbol_map[stock]['object'], quantity, average_buy_price, symbol_map[stock]['symbol']))
         return result
 
     def get_invested_value(self, date=None):
@@ -352,34 +365,38 @@ class Portfolio(models.Model):
         trades = Trade.objects.filter(
             portfolio=self,
             timestamp__lte=date
-        ).order_by('stock', 'timestamp')
+        ).order_by('timestamp', 'stock')
 
         # Dictionary to hold FIFO purchase history for each stock
         stock_history = {}
         stock_profits = {}
+        symbol_map = {}
         for trade in trades:
-            if trade.stock.asset not in stock_history:
-                stock_history[trade.stock.asset] = deque()
-            if trade.stock.asset not in stock_profits:
-                stock_profits[trade.stock.asset] = 0
+            asset = str(trade.stock.asset)
+            if asset not in stock_history:
+                stock_history[asset] = deque()
+                symbol_map[asset] = {'object': trade.stock.asset,
+                                    'symbol': trade.stock.symbol}
+            if asset not in stock_profits:
+                stock_profits[asset] = 0
 
             if trade.operation == 'BUY':
                 # Add to purchase history with FIFO
-                stock_history[trade.stock.asset].append((trade.quantity, trade.price))
+                stock_history[asset].append((trade.quantity, trade.price))
             elif trade.operation == 'SELL':
                 # Process sale according to FIFO
                 quantity_to_sell = trade.quantity
                 total_cost = 0
-                while quantity_to_sell > 0 and stock_history[trade.stock.asset]:
-                    purchased_quantity, purchase_price = stock_history[trade.stock.asset].popleft()
+                while quantity_to_sell > 0 and stock_history[asset]:
+                    purchased_quantity, purchase_price = stock_history[asset].popleft()
                     if purchased_quantity <= quantity_to_sell:
                         total_cost += purchased_quantity * purchase_price
-                        stock_profits[trade.stock.asset] += (purchased_quantity * (trade.price - purchase_price))
+                        stock_profits[asset] += (purchased_quantity * (trade.price - purchase_price))
                         quantity_to_sell -= purchased_quantity
                     else:
                         total_cost += quantity_to_sell * purchase_price
-                        stock_profits[trade.stock.asset] += (quantity_to_sell * (trade.price - purchase_price))
-                        stock_history[trade.stock.asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        stock_profits[asset] += (quantity_to_sell * (trade.price - purchase_price))
+                        stock_history[asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
                         quantity_to_sell = 0
 
         # Prepare the total realized profit
@@ -390,7 +407,65 @@ class Portfolio(models.Model):
 
     def get_unrealized_gains(self, date=None):
         pass
+    
+    def get_gains(self, date=None):
+        if date is None:
+            date = timezone.now()
 
+        # Ensure the provided date is timezone-aware
+        if timezone.is_naive(date):
+            date = timezone.make_aware(date)
+
+        # Get all trades up to the given date
+        trades = Trade.objects.filter(
+            portfolio=self,
+            timestamp__lte=date
+        ).order_by('timestamp', 'stock')
+
+        # Dictionary to hold FIFO purchase history for each stock
+        stock_history = {}
+        stock_profits = {}
+        symbol_map = {}
+        for trade in trades:
+            asset = str(trade.stock.asset)
+            if asset not in stock_history:
+                stock_history[asset] = deque()
+                symbol_map[asset] = {'object': trade.stock.asset,
+                                    'symbol': trade.stock.symbol}
+            if asset not in stock_profits:
+                stock_profits[asset] = 0
+
+            if trade.operation == 'BUY':
+                # Add to purchase history with FIFO
+                stock_history[asset].append((trade.quantity, trade.price))
+            elif trade.operation == 'SELL':
+                # Process sale according to FIFO
+                quantity_to_sell = trade.quantity
+                total_cost = 0
+                while quantity_to_sell > 0 and stock_history[asset]:
+                    purchased_quantity, purchase_price = stock_history[asset].popleft()
+                    if purchased_quantity <= quantity_to_sell:
+                        total_cost += purchased_quantity * purchase_price
+                        stock_profits[asset] += (purchased_quantity * (trade.price - purchase_price))
+                        quantity_to_sell -= purchased_quantity
+                    else:
+                        total_cost += quantity_to_sell * purchase_price
+                        stock_profits[asset] += (quantity_to_sell * (trade.price - purchase_price))
+                        stock_history[asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
+                        quantity_to_sell = 0
+
+        # Prepare the total realized profit
+        net_realized_gains = 0
+        for stock, gains in stock_profits.items():
+            net_realized_gains += gains
+        net_unrealized_gains = 0
+        for stock, history in stock_history.items():
+            quantity = sum(q for q, _ in history)
+            if quantity > 0:
+                total_cost = sum(q * p for q, p in history)
+                
+        return net_realized_gains
+    
     def get_net_gains(self, date=None):
         if date is None:
             date = timezone.now()
@@ -448,6 +523,12 @@ class Trade(models.Model):
     portfolio = models.ForeignKey(Portfolio, related_name="portfolio", null=False, blank=False, on_delete=models.CASCADE)
     tax = models.DecimalField(max_digits=20, blank=True, decimal_places=2, default=0)
     brokerage = models.DecimalField(max_digits=20, blank=True, decimal_places=2, default=0)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['trade_id']),
+            models.Index(fields=['timestamp']),
+        ]
 
     def __str__(self):
         return "{} {} shares of {} at {}".format(self.operation, self.quantity, self.stock.symbol, self.price)

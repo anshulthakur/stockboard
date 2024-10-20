@@ -9,8 +9,10 @@ from django.utils import timezone
 import json
 
 SPLITS_FILE = '/home/anshul/stockboard/stock_splits.json'
+BONUSES_FILE = '/home/anshul/stockboard/stock_bonuses.json'
 
 splits_object = None
+bonuses_object = None 
 
 def get_splits_object():
     global splits_object
@@ -18,18 +20,34 @@ def get_splits_object():
     if splits_object is None:
         with open(SPLITS_FILE, 'r') as f:
             splits_object = json.load(f)
+            splits_object = sorted(splits_object, key=lambda x: datetime.strptime(x['ex-date'], "%d %B %Y"))
     return splits_object
+
+def get_bonuses_object():
+    global bonuses_object
+
+    if bonuses_object is None:
+        with open(BONUSES_FILE, 'r') as f:
+            bonuses_object = json.load(f)
+            bonuses_object = sorted(bonuses_object, key=lambda x: datetime.strptime(x['ex-date'], "%d %B %Y"))
+    return bonuses_object
 
 def get_split_bonus_data(stock):
         """
         Fetch the stock split/bonus data from a JSON file (or another source).
         """
-        split_bonus_data = get_splits_object()
+        split_data = get_splits_object()
         # Return all matching entries for the stock
-        return [entry for entry in split_bonus_data if \
+        s_data = [entry for entry in split_data if \
                 ((entry['nse'] and entry['nse'].strip().upper() == stock.symbol) \
                  or (entry['bse'] and entry['bse'].strip().upper() == stock.sid))]
-
+        
+        bonus_data = get_bonuses_object()
+        b_data = [entry for entry in bonus_data if \
+                ((entry['nse'] and entry['nse'].strip().upper() == stock.symbol) \
+                 or (entry['bse'] and entry['bse'].strip().upper() == stock.sid))]
+        
+        return [s_data, b_data]
 
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -111,7 +129,7 @@ class PortfolioSerializer(serializers.HyperlinkedModelSerializer):
         return obj.get_portfolio_value()
 
     def get_realized_profit(self, obj):
-        return obj.get_net_gains()
+        return obj.get_realized_gains()
 
 
 class HoldingSerializer(serializers.Serializer):
@@ -236,47 +254,91 @@ class BulkTradeSerializer(serializers.ListSerializer):
             else:
                 trades_to_create.append(Trade(**item))
             
-            if not is_duplicate: #Handle bonus/splits
+            if not is_duplicate:  # Handle bonus/splits
                 stock = item.get('stock')  # Assuming 'stock' holds the stock object
                 trade_date = item.get('timestamp').date()
 
                 # Fetch the stock's split/bonus history
-                split_bonus_data = get_split_bonus_data(stock)
+                split_data, bonus_data = get_split_bonus_data(stock)
 
-                # Process stock split/bonus if trade is before any ex-date
-                for split in split_bonus_data:
-                    #print(split)
+                # if len(split_data) > 0 or len(bonus_data) > 0:
+                #     print(item)
+                #     print(split_data)
+                #     print(bonus_data)
+                if len(split_data) == 0 and len(bonus_data) == 0:
+                    continue
+                stock_identifier = None
+                if stock.symbol:
+                    stock_identifier = stock.symbol  # NSE symbol as string
+                elif stock.sid:
+                    stock_identifier = str(stock.sid)  # BSE ID converted to string for uniformity
+
+                if stock_identifier not in reconciliation_trades:
+                    reconciliation_trades[stock_identifier] = {
+                        'buy_qty': 0,
+                        'sell_qty': 0,
+                        'portfolio': item.get('portfolio'),
+                        'ex_date': None  # Track ex-date from splits and bonuses
+                    }
+                current_trade = {
+                        'buy_qty': 0,
+                        'sell_qty': 0,
+                        'portfolio': item.get('portfolio'),
+                        'ex_date': None  # Track ex-date from splits and bonuses
+                    }
+
+                # Apply stock splits first
+                for split in split_data:
                     ex_date = datetime.strptime(split['ex-date'], '%d %B %Y')
 
                     if trade_date < ex_date.date():
+                        #print('Adjust for split', split)
                         # Calculate cumulative quantity and zero-cost trades to be reconciled
                         old_face_value = float(split['old-face-value'])
                         new_face_value = float(split['new-face-value'])
-                        factor = old_face_value / new_face_value
-                        #print(factor)
-                        # Handle the stock identifier (NSE symbol or BSE ID)
-                        if stock.symbol:
-                            stock_identifier = stock.symbol  # NSE symbol as string
-                        elif stock.sid:
-                            stock_identifier = str(stock.sid)  # BSE ID converted to string for uniformity
-
-                        if stock_identifier not in reconciliation_trades:
-                            reconciliation_trades[stock_identifier] = {
-                                'buy_qty': 0,
-                                'sell_qty': 0,
-                                'portfolio': item.get('portfolio')
-                            }
+                        factor = (old_face_value / new_face_value)
+                        current_trade['ex_date'] = ex_date  # Update ex-date
 
                         # Add adjustments for buys and sells before ex-date
                         if item['operation'] == 'BUY':
-                            reconciliation_trades[stock_identifier]['buy_qty'] += int(item['quantity'] * Decimal(factor - 1))
+                            current_trade['buy_qty'] += int(item['quantity'] * Decimal(factor - 1))
+                            #print(f'Add buy {int(item['quantity'] * Decimal(factor - 1))} for {stock_identifier}')
                         elif item['operation'] == 'SELL':
-                            reconciliation_trades[stock_identifier]['sell_qty'] += int(item['quantity'] * Decimal(factor - 1))
+                            current_trade['sell_qty'] += int(item['quantity'] * Decimal(factor - 1))
+                            #print(f'Add sell {int(item['quantity'] * Decimal(factor - 1))} for {stock_identifier}')
+
+                # Apply stock bonuses to the adjusted quantities after the split
+                for bonus in bonus_data:
+                    #print(bonus)
+                    ex_date = datetime.strptime(bonus['ex-date'], '%d %B %Y')
+
+                    if trade_date < ex_date.date():
+                        # Calculate cumulative quantity and zero-cost trades to be reconciled
+                        ratio = bonus['ratio'].split(':')
+                        bonus_factor = (float(ratio[0]) / float(ratio[1]))
+                        #print(f'Adjust for bonus factor {bonus_factor}', bonus)
+                        current_trade['ex_date'] = ex_date  # Update ex-date
+
+                        # Apply bonus to already adjusted quantities due to splits
+                        adjusted_buy_qty = current_trade['buy_qty'] + item['quantity']
+                        adjusted_sell_qty = current_trade['sell_qty'] + item['quantity']
+
+                        if item['operation'] == 'BUY':
+                            current_trade['buy_qty'] += Decimal(int(float(adjusted_buy_qty) * bonus_factor))
+                            #print(f'Add buy {Decimal(int(float(adjusted_buy_qty) * bonus_factor))} for {stock_identifier}')
+                        elif item['operation'] == 'SELL':
+                            current_trade['sell_qty'] += Decimal(int(float(adjusted_sell_qty) * bonus_factor))
+                            #print(f'Add sell {Decimal(int(float(adjusted_sell_qty) * bonus_factor))} for {stock_identifier}')
+                
+                reconciliation_trades[stock_identifier]['buy_qty'] += current_trade['buy_qty']
+                reconciliation_trades[stock_identifier]['sell_qty'] += current_trade['sell_qty']
+                reconciliation_trades[stock_identifier]['ex_date'] = current_trade['ex_date']
+
 
         # Create reconciliation trades for stocks after split/bonus
         for stock_identifier, reconciliation in reconciliation_trades.items():
-            cumulative_buy = reconciliation['buy_qty'] - reconciliation['sell_qty']
-            #print(reconciliation)
+            cumulative_buy = Decimal(reconciliation['buy_qty'] - reconciliation['sell_qty'])
+            print(stock, reconciliation)
             if cumulative_buy > 0:
                 # Add zero-cost reconciliation trade
                 try:
@@ -291,20 +353,21 @@ class BulkTradeSerializer(serializers.ListSerializer):
                 if stock_obj:
                     reconciliation_trade = Trade(
                         stock=stock_obj,
-                        timestamp=timezone.make_aware(ex_date),
+                        timestamp=timezone.make_aware(reconciliation['ex_date']),
                         operation='BUY',
                         quantity=cumulative_buy,
                         price=0,  # Zero-cost
-                        trade_id=f"RECON-{stock_identifier}-{ex_date}",
+                        trade_id=f"RECON-{stock_identifier}-{reconciliation['ex_date']}",
                         portfolio = reconciliation['portfolio']
                     )
-                    #print('create', reconciliation_trade)
+                    print('create', reconciliation_trade)
                     trades_to_create.append(reconciliation_trade)
 
         # Create new trades
         #Can't do a bulk_create because we have dependencies to resolve
         #Trade.objects.bulk_create(trades_to_create)
         for trade in trades_to_create:
+            #print(trade)
             trade.save()
 
         # Update existing trades (duplicates)

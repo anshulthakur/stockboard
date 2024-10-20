@@ -13,6 +13,7 @@ const Trades = ({ portfolio, trades}) => {
     // }, [portfolio, fetchTrades]);
 
     return (
+      <div style={{ overflowX: 'auto', maxWidth: '100%', whiteSpace: 'nowrap' }}>
       <Table responsive striped bordered hover>
         <thead>
           <tr>
@@ -31,7 +32,7 @@ const Trades = ({ portfolio, trades}) => {
         <tbody>
         {trades.map((trade, index) => (
               <tr key={index} className={getRowClass(trade.operation)}>
-                  <td>{trade.id}</td>
+                  <td>{trade.trade_id}</td>
                   <td>{new Date(trade.timestamp).toLocaleString()}</td>
                   <td><a href={trade.stock}>{trade.symbol}</a></td>
                   <td>{trade.market}</td>
@@ -45,6 +46,7 @@ const Trades = ({ portfolio, trades}) => {
           ))}
         </tbody>
       </Table>
+      </div>
     );
 };
   

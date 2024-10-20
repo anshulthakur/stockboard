@@ -12,6 +12,7 @@ export const PortfoliosProvider = ({ children }) => {
     useEffect(() => {
         axios.get('/portfolio/api/portfolios/')
             .then(response => {
+                console.log('portfolios');
                 console.log(response);
                 if (response.data.count !== 0) {
                     setPortfolios(response.data.results);
