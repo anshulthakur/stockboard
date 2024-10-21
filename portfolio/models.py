@@ -266,41 +266,34 @@ class Portfolio(models.Model):
         for trade in trades:
             asset = str(trade.stock.asset).strip()
             if asset not in stock_history:
-                #print(f'Add {asset} to history')
                 stock_history[asset] = deque()
                 symbol_map[asset] = {'object': trade.stock.asset,
                                     'symbol': trade.stock.symbol}
-
             if trade.operation == 'BUY':
                 # Add to purchase history with FIFO
                 stock_history[asset].append((trade.quantity, trade.price))
-                #print(f'Buy {trade.quantity} of {asset}')
             elif trade.operation == 'SELL':
                 # Process sale according to FIFO
-                #print(f'Sell {trade.quantity} of {asset}')
                 quantity_to_sell = trade.quantity
                 total_cost = 0
-                if not stock_history[asset]:
-                    print(f"History absent for {asset}")
                 while quantity_to_sell > 0 and stock_history[asset]:
                     purchased_quantity, purchase_price = stock_history[asset].popleft()
                     if purchased_quantity <= quantity_to_sell:
                         total_cost += purchased_quantity * purchase_price
                         quantity_to_sell -= purchased_quantity
-                        #print(f"{asset} completely sold from portfolio")
                     else:
                         total_cost += quantity_to_sell * purchase_price
                         stock_history[asset].appendleft((purchased_quantity - quantity_to_sell, purchase_price))
                         quantity_to_sell = 0
-                        #print(f"{purchased_quantity - quantity_to_sell} remain for {asset}")
+                        
 
         # Prepare the result list
         result = []
         for stock, history in stock_history.items():
             quantity = sum(q for q, _ in history)
-            # print(f'Stock {stock}: {quantity}')
-            # for q, _ in history:
-            #     print(f"\t{q}")
+            #     print(f'Stock {stock}: {quantity}')
+            #     for q, _ in history:
+            #         print(f"\t{q}")
             
             if quantity > 0:
                 total_cost = sum(q * p for q, p in history)
@@ -531,7 +524,7 @@ class Trade(models.Model):
         ]
 
     def __str__(self):
-        return "{} {} shares of {} at {}".format(self.operation, self.quantity, self.stock.symbol, self.price)
+        return "{} {} shares of {} at {} on {} ({})".format(self.operation, self.quantity, self.stock.symbol, self.price, self.timestamp, self.trade_id)
 
     def delete(self, *args, **kwargs):
         mappings = TradeTransactionMapping.objects.filter(trade=self)

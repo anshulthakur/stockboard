@@ -220,7 +220,8 @@ class TradeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(portfolio__id=portfolio_filter)
         if symbol:
             queryset = queryset.filter(stock__symbol__icontains=symbol)
-        print(queryset)
+        for q in queryset:
+            print(q)
         return queryset
     
     def partial_update(self, request, *args, **kwargs):

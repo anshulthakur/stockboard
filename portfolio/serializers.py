@@ -6,10 +6,11 @@ from stocks.models import Stock, Market
 from decimal import Decimal
 from datetime import datetime
 from django.utils import timezone
+from collections import defaultdict
 import json
 
-SPLITS_FILE = '/home/anshul/stockboard/stock_splits.json'
-BONUSES_FILE = '/home/anshul/stockboard/stock_bonuses.json'
+SPLITS_FILE = '/home/anshul/web/stockboard/stock_splits.json'
+BONUSES_FILE = '/home/anshul/web/stockboard/stock_bonuses.json'
 
 splits_object = None
 bonuses_object = None 
@@ -234,134 +235,118 @@ class BulkTradeSerializer(serializers.ListSerializer):
         duplicates_to_update = []
         reconciliation_trades = {}  # Keep track of cumulative adjustments per stock
 
+        # Step 1: Organize trades per stock
+        trades_by_stock = defaultdict(list)
+
+        # Populate trades_by_stock dictionary with trades, assuming 'validated_data' contains trades
         for item in validated_data:
-            is_duplicate = False 
             item.pop('stock_symbol', None)
             item.pop('isin', None)
             item.pop('exchange', None)
             item.pop('name', None)
-            trade_id = item['trade_id']
-            trade_ids.append(trade_id)
-
-            # Check if trade already exists
-            existing_trade = Trade.objects.filter(trade_id=trade_id).first()
-            if existing_trade:
-                # Update existing trade (duplicates)
-                for key, value in item.items():
-                    setattr(existing_trade, key, value)
-                duplicates_to_update.append(existing_trade)
-                is_duplicate = True
-            else:
-                trades_to_create.append(Trade(**item))
             
-            if not is_duplicate:  # Handle bonus/splits
-                stock = item.get('stock')  # Assuming 'stock' holds the stock object
-                trade_date = item.get('timestamp').date()
+            stock = item.get('stock')  # Assuming 'stock' holds the stock object
+            trade_date = item.get('timestamp').date()
+            trades_by_stock[stock.symbol].append(item)
 
-                # Fetch the stock's split/bonus history
-                split_data, bonus_data = get_split_bonus_data(stock)
+        # Sort trades per stock by date
+        for stock_symbol in trades_by_stock:
+            trades_by_stock[stock_symbol].sort(key=lambda x: x['timestamp'])
 
-                # if len(split_data) > 0 or len(bonus_data) > 0:
-                #     print(item)
-                #     print(split_data)
-                #     print(bonus_data)
-                if len(split_data) == 0 and len(bonus_data) == 0:
-                    continue
-                stock_identifier = None
-                if stock.symbol:
-                    stock_identifier = stock.symbol  # NSE symbol as string
-                elif stock.sid:
-                    stock_identifier = str(stock.sid)  # BSE ID converted to string for uniformity
+        # Step 2: Load and sort stock split/bonus data
+        split_bonus_events = defaultdict(list)
 
-                if stock_identifier not in reconciliation_trades:
-                    reconciliation_trades[stock_identifier] = {
-                        'buy_qty': 0,
-                        'sell_qty': 0,
-                        'portfolio': item.get('portfolio'),
-                        'ex_date': None  # Track ex-date from splits and bonuses
-                    }
-                current_trade = {
-                        'buy_qty': 0,
-                        'sell_qty': 0,
-                        'portfolio': item.get('portfolio'),
-                        'ex_date': None  # Track ex-date from splits and bonuses
-                    }
+        for stock_symbol, trades in trades_by_stock.items():
+            stock = trades[0].get('stock')  # Assuming all trades have the same stock
+            split_data, bonus_data = get_split_bonus_data(stock)
+            
+            for split in split_data:
+                ex_date = datetime.strptime(split['ex-date'], '%d %B %Y')
+                split_bonus_events[stock_symbol].append({
+                    'type': 'split',
+                    'ex_date': ex_date,
+                    'old_face_value': float(split['old-face-value']),
+                    'new_face_value': float(split['new-face-value']),
+                })
 
-                # Apply stock splits first
-                for split in split_data:
-                    ex_date = datetime.strptime(split['ex-date'], '%d %B %Y')
+            for bonus in bonus_data:
+                ex_date = datetime.strptime(bonus['ex-date'], '%d %B %Y')
+                ratio = bonus['ratio'].split(':')
+                bonus_factor = (float(ratio[0]) / float(ratio[1]))
+                split_bonus_events[stock_symbol].append({
+                    'type': 'bonus',
+                    'ex_date': ex_date,
+                    'factor': bonus_factor,
+                })
+        # Sort events for each stock by date
+        for stock_symbol in split_bonus_events:
+            split_bonus_events[stock_symbol].sort(key=lambda x: x['ex_date'])
 
-                    if trade_date < ex_date.date():
-                        #print('Adjust for split', split)
-                        # Calculate cumulative quantity and zero-cost trades to be reconciled
-                        old_face_value = float(split['old-face-value'])
-                        new_face_value = float(split['new-face-value'])
-                        factor = (old_face_value / new_face_value)
-                        current_trade['ex_date'] = ex_date  # Update ex-date
-
-                        # Add adjustments for buys and sells before ex-date
-                        if item['operation'] == 'BUY':
-                            current_trade['buy_qty'] += int(item['quantity'] * Decimal(factor - 1))
-                            #print(f'Add buy {int(item['quantity'] * Decimal(factor - 1))} for {stock_identifier}')
-                        elif item['operation'] == 'SELL':
-                            current_trade['sell_qty'] += int(item['quantity'] * Decimal(factor - 1))
-                            #print(f'Add sell {int(item['quantity'] * Decimal(factor - 1))} for {stock_identifier}')
-
-                # Apply stock bonuses to the adjusted quantities after the split
-                for bonus in bonus_data:
-                    #print(bonus)
-                    ex_date = datetime.strptime(bonus['ex-date'], '%d %B %Y')
-
-                    if trade_date < ex_date.date():
-                        # Calculate cumulative quantity and zero-cost trades to be reconciled
-                        ratio = bonus['ratio'].split(':')
-                        bonus_factor = (float(ratio[0]) / float(ratio[1]))
-                        #print(f'Adjust for bonus factor {bonus_factor}', bonus)
-                        current_trade['ex_date'] = ex_date  # Update ex-date
-
-                        # Apply bonus to already adjusted quantities due to splits
-                        adjusted_buy_qty = current_trade['buy_qty'] + item['quantity']
-                        adjusted_sell_qty = current_trade['sell_qty'] + item['quantity']
-
-                        if item['operation'] == 'BUY':
-                            current_trade['buy_qty'] += Decimal(int(float(adjusted_buy_qty) * bonus_factor))
-                            #print(f'Add buy {Decimal(int(float(adjusted_buy_qty) * bonus_factor))} for {stock_identifier}')
-                        elif item['operation'] == 'SELL':
-                            current_trade['sell_qty'] += Decimal(int(float(adjusted_sell_qty) * bonus_factor))
-                            #print(f'Add sell {Decimal(int(float(adjusted_sell_qty) * bonus_factor))} for {stock_identifier}')
+        # Step 3: Compute reconciliation trades
+        for stock_symbol, events in split_bonus_events.items():
+            reconciliation = {
+                'buy_qty': 0,
+                'sell_qty': 0,
+                'portfolio': trades_by_stock[stock_symbol][0]['portfolio'],
+                'ex_date': None  # To track each event's ex-date
+            }
+            
+            trades = trades_by_stock[stock_symbol]
+            
+            for event in events:
+                for trade in trades:
+                    trade_date = trade.get('timestamp').date()
+                    
+                    if trade_date < event['ex_date'].date():
+                        if event['type'] == 'split':
+                            factor = event['old_face_value'] / event['new_face_value']
+                            if trade['operation'] == 'BUY':
+                                reconciliation['buy_qty'] += int(trade['quantity'] * Decimal(factor - 1))
+                            elif trade['operation'] == 'SELL':
+                                reconciliation['sell_qty'] += int(trade['quantity'] * Decimal(factor - 1))
+                        elif event['type'] == 'bonus':
+                            if trade['operation'] == 'BUY':
+                                reconciliation['buy_qty'] += int(float(trade['quantity']) * event['factor'])
+                            elif trade['operation'] == 'SELL':
+                                reconciliation['sell_qty'] += int(float(trade['quantity']) * event['factor'])
                 
-                reconciliation_trades[stock_identifier]['buy_qty'] += current_trade['buy_qty']
-                reconciliation_trades[stock_identifier]['sell_qty'] += current_trade['sell_qty']
-                reconciliation_trades[stock_identifier]['ex_date'] = current_trade['ex_date']
-
-
-        # Create reconciliation trades for stocks after split/bonus
-        for stock_identifier, reconciliation in reconciliation_trades.items():
-            cumulative_buy = Decimal(reconciliation['buy_qty'] - reconciliation['sell_qty'])
-            print(stock, reconciliation)
-            if cumulative_buy > 0:
-                # Add zero-cost reconciliation trade
-                try:
-                    stock_obj = Stock.objects.filter(Q(sid=stock_identifier)).first()
-                except:
-                    stock_obj = Stock.objects.filter(Q(symbol=stock_identifier)).first()
+                # Create a single reconciliation trade for the current event
+                cumulative_buy = reconciliation['buy_qty']
+                cumulative_sell = reconciliation['sell_qty']
                 
-                # Handle BSE ID specifically as an integer match
-                if not stock_obj:
-                    stock_obj = Stock.objects.filter(sid=int(stock_identifier)).first()
+                if cumulative_buy > 0 or cumulative_sell > 0:
+                    reconciliation_trade = {
+                        'stock':trades[0]['stock'],
+                        'timestamp':timezone.make_aware(event['ex_date']),
+                        'operation':'BUY',
+                        'quantity':cumulative_buy - cumulative_sell,
+                        'price':0,  # Zero-cost
+                        'trade_id':f"RECON-{stock_symbol}-{event['ex_date']}",
+                        'portfolio':reconciliation['portfolio']
+                    }
+                    #print('create', reconciliation_trade)
+                    trades.append(reconciliation_trade)  # Insert the reconciliation trade
 
-                if stock_obj:
-                    reconciliation_trade = Trade(
-                        stock=stock_obj,
-                        timestamp=timezone.make_aware(reconciliation['ex_date']),
-                        operation='BUY',
-                        quantity=cumulative_buy,
-                        price=0,  # Zero-cost
-                        trade_id=f"RECON-{stock_identifier}-{reconciliation['ex_date']}",
-                        portfolio = reconciliation['portfolio']
-                    )
-                    print('create', reconciliation_trade)
-                    trades_to_create.append(reconciliation_trade)
+                # Reset reconciliation after each event
+                reconciliation['buy_qty'] = 0
+                reconciliation['sell_qty'] = 0
+
+            # Sort trades again after inserting reconciliation trades
+            trades.sort(key=lambda x: x['timestamp'])
+
+        # Step 4: Save all trades to DB
+        trades_to_create = []
+        duplicates_to_update = []
+
+        for stock_symbol, trades in trades_by_stock.items():
+            for trade in trades:
+                existing_trade = Trade.objects.filter(trade_id=trade['trade_id']).first()
+                if existing_trade:
+                    for key, value in trade.items():
+                        setattr(existing_trade, key, value)
+                    duplicates_to_update.append(existing_trade)
+                else:
+                    trades_to_create.append(Trade(**trade))
 
         # Create new trades
         #Can't do a bulk_create because we have dependencies to resolve
