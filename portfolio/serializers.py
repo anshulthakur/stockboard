@@ -1,3 +1,5 @@
+from django.conf import settings
+import os
 from django.contrib.auth.models import Group, User
 from django.db.models import Q
 from rest_framework import serializers
@@ -9,8 +11,8 @@ from django.utils import timezone
 from collections import defaultdict
 import json
 
-SPLITS_FILE = '/home/anshul/web/stockboard/stock_splits.json'
-BONUSES_FILE = '/home/anshul/web/stockboard/stock_bonuses.json'
+SPLITS_FILE = os.path.join(settings.BASE_DIR, 'stock_splits.json')
+BONUSES_FILE = os.path.join(settings.BASE_DIR, 'stock_bonuses.json')
 
 splits_object = None
 bonuses_object = None 
@@ -321,7 +323,7 @@ class BulkTradeSerializer(serializers.ListSerializer):
                         'operation':'BUY',
                         'quantity':cumulative_buy - cumulative_sell,
                         'price':0,  # Zero-cost
-                        'trade_id':f"RECON-{stock_symbol}-{event['ex_date']}",
+                        'trade_id':f"RECON-{stock_symbol}-{event['type'].upper()}-{event['ex_date']}",
                         'portfolio':reconciliation['portfolio']
                     }
                     #print('create', reconciliation_trade)
