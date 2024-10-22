@@ -4,7 +4,10 @@ Created on 12-Apr-2022
 @author: anshul
 '''
 import os
-import init
+from libinit import is_initialized, initialize
+if not is_initialized():
+    import init
+
 import pandas as pd
 
 from django_pandas.io import read_frame
@@ -13,15 +16,17 @@ from django_pandas.io import read_frame
 import datetime
 import talib
 from talib.abstract import *
+from django.utils import timezone
 
 # format price data
 pd.options.display.float_format = '{:0.2f}'.format
 
 #Prepare to load stock data as pandas dataframe from source. In this case, prepare django
 import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
-os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-django.setup()
+if not is_initialized():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    django.setup()
 
 from stocks.models import Listing, Stock
 
@@ -116,3 +121,9 @@ def get_stock_listing(stock, duration=None, last_date = datetime.date.today(), s
         if 'ema10' in studies.get('daily'):
             df['ema10'] = talib.EMA(df['close'], 10)
     return df
+
+def get_price(stock, date=datetime.date.today()):
+    if timezone.is_naive(date):
+        date = timezone.make_aware(date)
+    latest_entry = Listing.objects.filter(stock=stock, date__lte=date).latest('date')
+    return latest_entry

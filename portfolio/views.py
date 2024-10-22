@@ -14,7 +14,6 @@ from rest_framework.permissions import IsAuthenticated
 
 from django.contrib.auth.decorators import login_required
 
-
 def temp(request):
     return render(request, "portfolio/lander.html", context={})
 
@@ -247,7 +246,7 @@ class HoldingsViewSet(viewsets.ViewSet):
         portfolio = Portfolio.objects.get(id=portfolio_id)
         holdings = portfolio.get_portfolio()
         
-        members = [{'stock': member[0], 'symbol':member[3], 'shares': member[1], 'price': member[2], 'cost': 0, 'cmp': 0, 'value': 0, 'pnl': 0, 'day_change': 0} for member in holdings]
+        members = [{'stock': member[0], 'symbol':member[3], 'shares': member[1], 'price': member[2], 'cost': 0, 'cmp': member[4], 'value': 0, 'pnl': 0, 'day_change': 0} for member in holdings]
         members = sorted(members, key=lambda x: x['symbol'])
         # Apply search filtering
         symbol = request.query_params.get('symbol', None)
@@ -256,6 +255,9 @@ class HoldingsViewSet(viewsets.ViewSet):
             members = [member for member in members if symbol.lower() in member['symbol'].lower()]
         if stock is not None:
             members = [member for member in members if stock.upper() in member['stock'].upper()]
+        for member in members:
+            member['value'] = float(member['cmp'])*float(member['shares'])
+            member['pnl'] = float(member['cmp'] - member['price'])*float(member['shares'])
 
         # Paginate the list manually
         paginator = CustomPagination()

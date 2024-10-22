@@ -8,6 +8,7 @@ from django.utils import timezone
 from decimal import Decimal
 from collections import deque
 from django.core.exceptions import ValidationError
+from lib.retrieval import get_price
 
 class Account(models.Model):
     """
@@ -298,7 +299,12 @@ class Portfolio(models.Model):
             if quantity > 0:
                 total_cost = sum(q * p for q, p in history)
                 average_buy_price = total_cost / quantity
-                result.append((symbol_map[stock]['object'], quantity, average_buy_price, symbol_map[stock]['symbol']))
+                try:
+                    cmp = get_price(stock=symbol_map[stock]['object'], date=date).close
+                except:
+                    print(f"Error fetching price data for {symbol_map[stock]['object']}")
+                    cmp = float(0.0)
+                result.append((symbol_map[stock]['object'], quantity, average_buy_price, symbol_map[stock]['symbol'], cmp))
         return result
 
     def get_invested_value(self, date=None):
@@ -311,7 +317,7 @@ class Portfolio(models.Model):
                 sub_portfolio_value += stock[1]*stock[2]
         #print(f'Subportfolio value: {sub_portfolio_value}')
         #sub_portfolio_value = sum(sub.get_portfolio_value(date) for sub in self.sub_portfolios.all())
-        own_value = sum(s[1]*s[2] for s in self.calculate_own_value(date))
+        own_value = sum(s[1]*Decimal(s[2]) for s in self.calculate_own_value(date))
         #print(f'Own value: {own_value}')
         return own_value + (sub_portfolio_value or 0)
     
@@ -325,10 +331,10 @@ class Portfolio(models.Model):
         sub_portfolio_value = None
         for sub in self.sub_portfolios.all():
             for stock in sub.get_portfolio_value(date):
-                sub_portfolio_value += stock[1]*stock[2]
+                sub_portfolio_value += stock[1]*stock[4]
         #print(f'Subportfolio value: {sub_portfolio_value}')
         #sub_portfolio_value = sum(sub.get_portfolio_value(date) for sub in self.sub_portfolios.all())
-        own_value = sum(s[1]*s[2] for s in self.calculate_own_value(date))
+        own_value = sum(s[1]*Decimal(s[4]) for s in self.calculate_own_value(date))
         #print(f'Own value: {own_value}')
         return own_value + (sub_portfolio_value or 0)
 
